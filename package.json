@@ -9,12 +9,18 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "d3": "^7.9.0",
+    "framer-motion": "^13.4.0",
+    "lucide-react": "^1.48.0",
     "next": "16.3.5",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "reactflow": "^11.11.4",
+    "recharts": "^3.10.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/d3": "^7.4.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
