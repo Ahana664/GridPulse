@@ -1,6 +1,14 @@
+"use client";
+
 import AlertPanel from "@/components/alerts/AlertPanel";
+import SafetyStatus from "@/components/safety/SafetyStatus";
+import { useGridData } from "@/hooks/useGridData";
 
 export default function AlertsPage() {
+  const { data } = useGridData();
+  const criticalCount = data.alerts.filter((alert) => alert.type === "critical").length;
+  const warningCount = data.alerts.filter((alert) => alert.type === "warning").length;
+
   return (
     <div className="p-6">
       
@@ -12,7 +20,7 @@ export default function AlertsPage() {
           </p>
 
           <p className="mt-2 text-2xl font-semibold text-white">
-            3
+            {data.alerts.length}
           </p>
 
           <p className="mt-1 text-xs text-slate-400">
@@ -26,7 +34,7 @@ export default function AlertsPage() {
           </p>
 
           <p className="mt-2 text-2xl font-semibold text-red-400">
-            1
+            {criticalCount}
           </p>
 
           <p className="mt-1 text-xs text-red-400">
@@ -40,7 +48,7 @@ export default function AlertsPage() {
           </p>
 
           <p className="mt-2 text-2xl font-semibold text-yellow-400">
-            2
+            {warningCount}
           </p>
 
           <p className="mt-1 text-xs text-yellow-400">
@@ -51,6 +59,9 @@ export default function AlertsPage() {
 
       {/* Recent Alerts */}
       <AlertPanel />
+      <div className="mt-6">
+        <SafetyStatus />
+      </div>
     </div>
   );
 }

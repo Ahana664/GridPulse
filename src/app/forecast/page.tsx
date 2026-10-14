@@ -1,8 +1,17 @@
+"use client";
+
 import DemandForecast from "@/components/forecast/DemandForecast";
 import PeakPrediction from "@/components/forecast/PeakPrediction";
 import RiskIndicator from "@/components/forecast/RiskIndicator";
+import { useGridData } from "@/hooks/useGridData";
 
 export default function ForecastPage() {
+  const { data } = useGridData();
+  const peak = data.forecast.reduce(
+    (highest, point) => point.load > highest.load ? point : highest,
+    data.forecast[0] ?? { time: "—", load: 0 },
+  );
+
   return (
     <div className="p-6">
     
@@ -14,11 +23,11 @@ export default function ForecastPage() {
           </p>
 
           <p className="mt-2 text-2xl font-semibold text-white">
-            4,850 MW
+            {Math.round(peak.load).toLocaleString()} MW
           </p>
 
           <p className="mt-1 text-xs text-orange-400">
-            Expected at 18:00
+            Expected at {peak.time}
           </p>
         </div>
 
@@ -28,7 +37,7 @@ export default function ForecastPage() {
           </p>
 
           <p className="mt-2 text-2xl font-semibold text-white">
-            4,352 MW
+            {Math.round(data.summary.totalLoad).toLocaleString()} MW
           </p>
 
           <p className="mt-1 text-xs text-blue-400">
@@ -56,11 +65,11 @@ export default function ForecastPage() {
           </p>
 
           <p className="mt-2 text-2xl font-semibold text-green-400">
-            Low
+            {data.summary.risk.toUpperCase()}
           </p>
 
           <p className="mt-1 text-xs text-green-400">
-            System stable
+            {data.summary.systemHealth.toFixed(1)}% health
           </p>
         </div>
       </div>

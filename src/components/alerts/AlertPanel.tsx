@@ -1,28 +1,5 @@
 "use client";
-
-const alerts = [
-  {
-    id: 1,
-    type: "critical",
-    title: "High Load - North Zone",
-    message: "Load has reached 89% of capacity",
-    time: "11:43 AM",
-  },
-  {
-    id: 2,
-    type: "warning",
-    title: "Voltage Fluctuation",
-    message: "Voltage variation detected in East Zone",
-    time: "11:37 AM",
-  },
-  {
-    id: 3,
-    type: "warning",
-    title: "Frequency Deviation",
-    message: "Frequency deviated from nominal range",
-    time: "11:28 AM",
-  },
-];
+import { useGridData } from "@/hooks/useGridData";
 
 function AlertIcon({ type }: { type: string }) {
   if (type === "critical") {
@@ -41,6 +18,9 @@ function AlertIcon({ type }: { type: string }) {
 }
 
 export default function AlertPanel() {
+  const { data, isConnected } = useGridData();
+  const alerts = data.alerts;
+
   return (
     <div className="rounded-xl border border-slate-800 bg-[#0b1728] p-5">
 
@@ -56,13 +36,16 @@ export default function AlertPanel() {
           </p>
         </div>
 
-        <button className="text-sm text-blue-400 transition hover:text-blue-300">
-          View All
-        </button>
+        <span className="rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-300">
+          {alerts.length} active
+        </span>
       </div>
 
       {/* Alerts */}
       <div className="space-y-1">
+        {alerts.length === 0 && (
+          <p className="py-8 text-center text-sm text-slate-500">No active grid anomalies.</p>
+        )}
         {alerts.map((alert) => (
           <div
             key={alert.id}
@@ -81,7 +64,7 @@ export default function AlertPanel() {
             </div>
 
             <span className="shrink-0 text-xs text-slate-500">
-              {alert.time}
+              {isConnected ? new Date(alert.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Demo"}
             </span>
           </div>
         ))}

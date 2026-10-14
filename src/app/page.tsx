@@ -1,3 +1,5 @@
+"use client";
+
 import LoadChart from "@/components/dashboard/LoadChart";
 import {
   Activity,
@@ -7,14 +9,21 @@ import {
 } from "lucide-react";
 
 import StatCard from "@/components/dashboard/StatCards";
-import { mockStats } from "@/data/mockStats";
 import RegionPieChart from "@/components/dashboard/RegionPieChart";
 import GenerationMixChart from "@/components/dashboard/GenerationMixChart";
 import ForecastChart from "@/components/dashboard/ForecastChart";
 import AlertPanel from "@/components/alerts/AlertPanel";
 import GridMap from "@/components/grid/GridMap";
+import { useGridData } from "@/hooks/useGridData";
 
 export default function Home() {
+  const { data, isConnected } = useGridData();
+  const { summary } = data;
+  const predictedPeak = data.forecast.reduce(
+    (peak, point) => point.load > peak.load ? point : peak,
+    data.forecast[0] ?? { time: "—", load: 0 },
+  );
+
   return (
     <div className="space-y-6">
 
@@ -22,36 +31,36 @@ export default function Home() {
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
 
         <StatCard
-          title={mockStats.totalGeneration.title}
-          value={mockStats.totalGeneration.value}
-          unit={mockStats.totalGeneration.unit}
-          change={mockStats.totalGeneration.change}
+          title="Total Generation"
+          value={Math.round(summary.totalGeneration).toLocaleString()}
+          unit="MW"
+          change={`${summary.generationReserve >= 0 ? "+" : ""}${Math.round(summary.generationReserve).toLocaleString()} MW reserve`}
           icon={<Zap className="h-6 w-6" />}
         />
 
         <StatCard
-          title={mockStats.totalLoad.title}
-          value={mockStats.totalLoad.value}
-          unit={mockStats.totalLoad.unit}
-          change={mockStats.totalLoad.change}
+          title="Total Load"
+          value={Math.round(summary.totalLoad).toLocaleString()}
+          unit="MW"
+          change={`${summary.nodeCount} grid nodes reporting`}
           icon={<BarChart3 className="h-6 w-6" />}
           iconColor="text-green-400"
         />
 
         <StatCard
-          title={mockStats.gridFrequency.title}
-          value={mockStats.gridFrequency.value}
-          unit={mockStats.gridFrequency.unit}
-          subtitle={mockStats.gridFrequency.subtitle}
+          title="Grid Frequency"
+          value={summary.frequency.toFixed(3)}
+          unit="Hz"
+          subtitle={`Nominal: 50 Hz · ${isConnected ? "Live" : "Demo feed"}`}
           icon={<Activity className="h-6 w-6" />}
           iconColor="text-purple-400"
         />
 
         <StatCard
-          title={mockStats.systemHealth.title}
-          value={mockStats.systemHealth.value}
-          unit={mockStats.systemHealth.unit}
-          subtitle={mockStats.systemHealth.subtitle}
+          title="System Health"
+          value={summary.systemHealth.toFixed(1)}
+          unit="%"
+          subtitle={`${summary.risk.toUpperCase()} grid risk`}
           icon={<ShieldCheck className="h-6 w-6" />}
           iconColor="text-green-400"
         />
@@ -149,11 +158,11 @@ export default function Home() {
               </p>
 
               <p className="mt-1 text-xl font-semibold text-white">
-                5,210 MW
+                {Math.round(predictedPeak.load).toLocaleString()} MW
               </p>
 
               <p className="text-xs text-slate-500">
-                at 18:00
+                at {predictedPeak.time}
               </p>
             </div>
 
@@ -163,11 +172,11 @@ export default function Home() {
               </p>
 
               <p className="mt-1 text-xl font-semibold text-white">
-                3,110 MW
+                {Math.round(Math.min(...data.forecast.map((point) => point.load))).toLocaleString()} MW
               </p>
 
               <p className="text-xs text-slate-500">
-                at 04:00
+                at {data.forecast.find((point) => point.load === Math.min(...data.forecast.map((item) => item.load)))?.time ?? "—"}
               </p>
             </div>
 
@@ -204,11 +213,11 @@ export default function Home() {
 
             <div>
               <p className="text-sm font-medium text-white">
-                All systems are running normally
+                {isConnected ? "Live monitoring is connected" : "Demo telemetry is active"}
               </p>
 
               <p className="mt-1 text-xs text-slate-400">
-                GridPulse monitoring services are operational
+                {data.nodes.length} simulated grid nodes · {summary.risk} system risk
               </p>
             </div>
 
@@ -221,7 +230,7 @@ export default function Home() {
             </p>
 
             <p className="mt-1 text-sm text-slate-300">
-              16 Aug 2026, 01:00 AM - 04:00 AM
+              {data.timestamp.slice(11, 16)} UTC · {isConnected ? "Live telemetry" : "Demo feed"}
             </p>
 
           </div>

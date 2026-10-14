@@ -1,4 +1,14 @@
+"use client";
+
+import { useGridData } from "@/hooks/useGridData";
+
 export default function PeakPrediction() {
+  const { data } = useGridData();
+  const peak = data.forecast.reduce(
+    (highest, point) => point.load > highest.load ? point : highest,
+    data.forecast[0] ?? { time: "—", load: 0 },
+  );
+
   return (
     <div className="rounded-xl border border-slate-800 bg-[#0b1728] p-5">
       <div className="mb-5">
@@ -18,7 +28,7 @@ export default function PeakPrediction() {
           </p>
 
           <p className="mt-2 text-2xl font-semibold text-white">
-            4,850 MW
+            {Math.round(peak.load).toLocaleString()} MW
           </p>
         </div>
 
@@ -28,7 +38,7 @@ export default function PeakPrediction() {
           </p>
 
           <p className="mt-2 text-2xl font-semibold text-white">
-            18:00
+            {peak.time}
           </p>
         </div>
       </div>

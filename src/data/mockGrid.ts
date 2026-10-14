@@ -8,6 +8,7 @@ export type GridNode = {
   voltage: number;
   load: number;
   power: number;
+  capacity?: number;
   status: "normal" | "warning" | "critical";
 };
 
@@ -17,6 +18,7 @@ export type GridConnection = {
   target: string;
   power: number;
   loadPercentage: number;
+  capacity?: number;
   status: "normal" | "warning" | "critical";
 };
 
@@ -150,6 +152,16 @@ export const gridNodes: GridNode[] = [
     power: 1202,
     status: "normal",
   },
+  { id: "LOAD-N2", name: "North Industrial Park", type: "load", zone: "North Zone", x: 790, y: 80, voltage: 132, load: 71, power: 341, capacity: 480, status: "normal" },
+  { id: "GEN-E1", name: "East Wind Farm", type: "generation", zone: "East Zone", x: 120, y: 205, voltage: 230, load: 77, power: 858, capacity: 1100, status: "normal" },
+  { id: "SUB-E1", name: "East Substation", type: "substation", zone: "East Zone", x: 390, y: 205, voltage: 230, load: 65, power: 663, capacity: 1400, status: "normal" },
+  { id: "LOAD-E2", name: "East Residential Load", type: "load", zone: "East Zone", x: 790, y: 205, voltage: 132, load: 68, power: 306, capacity: 450, status: "normal" },
+  { id: "GEN-C1", name: "Central Hydro Plant", type: "generation", zone: "Central Zone", x: 120, y: 330, voltage: 230, load: 84, power: 1134, capacity: 1350, status: "normal" },
+  { id: "LOAD-C1", name: "Central Business District", type: "load", zone: "Central Zone", x: 650, y: 330, voltage: 132, load: 88, power: 669, capacity: 760, status: "warning" },
+  { id: "LOAD-C2", name: "Central Hospital District", type: "load", zone: "Central Zone", x: 790, y: 330, voltage: 132, load: 74, power: 289, capacity: 390, status: "normal" },
+  { id: "SUB-W1", name: "West Substation", type: "substation", zone: "West Zone", x: 390, y: 455, voltage: 230, load: 67, power: 1060, capacity: 1250, status: "normal" },
+  { id: "LOAD-W2", name: "West Data Center", type: "load", zone: "West Zone", x: 790, y: 455, voltage: 132, load: 83, power: 432, capacity: 520, status: "normal" },
+  { id: "LOAD-S2", name: "South Residential Load", type: "load", zone: "South Zone", x: 790, y: 580, voltage: 132, load: 72, power: 338, capacity: 470, status: "normal" },
 ];
 
 export const gridConnections: GridConnection[] = [
@@ -233,4 +245,15 @@ export const gridConnections: GridConnection[] = [
     loadPercentage: 76,
     status: "normal",
   },
+  { id: "C10", source: "SUB-N1", target: "LOAD-N2", power: 341, loadPercentage: 71, capacity: 480, status: "normal" },
+  { id: "C11", source: "GEN-E1", target: "SUB-E1", power: 858, loadPercentage: 78, capacity: 1100, status: "normal" },
+  { id: "C12", source: "SUB-E1", target: "LOAD-E1", power: 467, loadPercentage: 82, capacity: 570, status: "warning" },
+  { id: "C13", source: "SUB-E1", target: "LOAD-E2", power: 306, loadPercentage: 68, capacity: 450, status: "normal" },
+  { id: "C14", source: "GEN-C1", target: "SUB-C1", power: 1134, loadPercentage: 84, capacity: 1350, status: "normal" },
+  { id: "C15", source: "SUB-C1", target: "LOAD-C1", power: 669, loadPercentage: 88, capacity: 760, status: "warning" },
+  { id: "C16", source: "SUB-C1", target: "LOAD-C2", power: 289, loadPercentage: 74, capacity: 390, status: "normal" },
+  { id: "C17", source: "GEN-W1", target: "SUB-W1", power: 540, loadPercentage: 60, capacity: 900, status: "normal" },
+  { id: "C18", source: "SUB-W1", target: "LOAD-W1", power: 643, loadPercentage: 58, capacity: 1100, status: "normal" },
+  { id: "C19", source: "SUB-W1", target: "LOAD-W2", power: 432, loadPercentage: 83, capacity: 520, status: "normal" },
+  { id: "C20", source: "SUB-S1", target: "LOAD-S2", power: 338, loadPercentage: 72, capacity: 470, status: "normal" },
 ];

@@ -7,6 +7,7 @@ import DemandSpikeButton from "@/components/simulator/DemandSpikeButton";
 import SolarFailureButton from "@/components/simulator/SolarFailureButton";
 import NodeFailureButton from "@/components/simulator/NodeFailureButton";
 import ScenarioResult from "@/components/simulator/ScenarioResult";
+import { useGridData, type ScenarioKey } from "@/hooks/useGridData";
 
 type Scenario =
   | "Heatwave"
@@ -42,15 +43,36 @@ const scenarioResults = {
 };
 
 export default function SimulatorPage() {
+  const { data, runScenario } = useGridData();
   const [selectedScenario, setSelectedScenario] =
     useState<Scenario>("Heatwave");
+  const [isRunning, setIsRunning] = useState(false);
+  const [simulationError, setSimulationError] = useState<string | null>(null);
+  const scenarioKey: Record<Scenario, ScenarioKey> = {
+    Heatwave: "heatwave",
+    "Demand Spike": "demand_spike",
+    "Solar Failure": "solar_failure",
+    "Node Failure": "node_failure",
+  };
+  const result = data.scenarioResult
+    ? {
+        loadImpact: data.scenarioResult.loadImpact,
+        frequency: data.scenarioResult.frequency,
+        generationImpact: data.scenarioResult.generationImpact,
+        risk: data.scenarioResult.risk,
+      }
+    : scenarioResults.Heatwave;
 
-  const [result, setResult] = useState(
-    scenarioResults.Heatwave
-  );
-
-  const handleRunSimulation = () => {
-    setResult(scenarioResults[selectedScenario]);
+  const handleRunSimulation = async () => {
+    setIsRunning(true);
+    setSimulationError(null);
+    try {
+      await runScenario(scenarioKey[selectedScenario]);
+    } catch (error) {
+      setSimulationError(error instanceof Error ? error.message : "Simulation failed.");
+    } finally {
+      setIsRunning(false);
+    }
   };
 
   return (
@@ -104,11 +126,15 @@ export default function SimulatorPage() {
 
           <button
             onClick={handleRunSimulation}
-            className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-blue-500"
+            disabled={isRunning}
+            className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-wait disabled:opacity-60"
           >
-            Run Simulation
+            {isRunning ? "Simulating…" : "Run Simulation"}
           </button>
         </div>
+        {simulationError && (
+          <p role="alert" className="mt-3 text-sm text-red-400">{simulationError}</p>
+        )}
       </div>
 
       {/* Simulation Results */}
@@ -119,7 +145,7 @@ export default function SimulatorPage() {
           </h2>
 
           <p className="mt-1 text-sm text-slate-400">
-            Estimated impact of the selected shock scenario.
+            {data.scenarioResult?.description ?? "Run a scenario to see its calculated impact on the live 20-node grid."}
           </p>
         </div>
 

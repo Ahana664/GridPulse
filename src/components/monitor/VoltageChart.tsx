@@ -9,18 +9,17 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-
-const voltageData = [
-  { time: "12:00", voltage: 228 },
-  { time: "12:05", voltage: 230 },
-  { time: "12:10", voltage: 229 },
-  { time: "12:15", voltage: 231 },
-  { time: "12:20", voltage: 230 },
-  { time: "12:25", voltage: 232 },
-  { time: "12:30", voltage: 230 },
-];
+import { useGridData } from "@/hooks/useGridData";
 
 export default function VoltageChart() {
+  const { data: grid } = useGridData();
+  const voltageData = grid.history.slice(-12).map((point) => ({
+    time: point.time.includes("T")
+      ? new Date(point.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : point.time,
+    voltage: point.voltage ?? grid.summary.averageVoltage,
+  }));
+
   return (
     <div className="rounded-xl border border-slate-800 bg-[#0b1728] p-5">
       <div className="mb-4">

@@ -9,20 +9,12 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-
-const forecastData = [
-  { time: "00:00", load: 3200 },
-  { time: "03:00", load: 2950 },
-  { time: "06:00", load: 3100 },
-  { time: "09:00", load: 3850 },
-  { time: "12:00", load: 4250 },
-  { time: "15:00", load: 4480 },
-  { time: "18:00", load: 4850 },
-  { time: "21:00", load: 4420 },
-  { time: "24:00", load: 3650 },
-];
+import { useGridData } from "@/hooks/useGridData";
 
 export default function DemandForecast() {
+  const { data } = useGridData();
+  const forecastData = data.forecast;
+
   return (
     <div className="rounded-xl border border-slate-800 bg-[#0b1728] p-5">
       <div className="mb-4">

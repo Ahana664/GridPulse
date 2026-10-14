@@ -1,8 +1,14 @@
+"use client";
+
 import TelemetryTable from "@/components/monitor/TelemetryTable";
 import VoltageChart from "@/components/monitor/VoltageChart";
 import LoadMonitor from "@/components/monitor/LoadMonitor";
+import { useGridData } from "@/hooks/useGridData";
 
 export default function MonitorPage() {
+  const { data } = useGridData();
+  const { summary } = data;
+
   return (
     <div className="p-6">
       
@@ -15,11 +21,11 @@ export default function MonitorPage() {
           </p>
 
           <p className="mt-2 text-2xl font-semibold text-white">
-            50.02 Hz
+            {summary.frequency.toFixed(3)} Hz
           </p>
 
           <p className="mt-1 text-xs text-green-400">
-            Stable
+            {Math.abs(summary.frequency - 50) <= 0.05 ? "Stable" : "Deviation"}
           </p>
         </div>
 
@@ -29,7 +35,7 @@ export default function MonitorPage() {
           </p>
 
           <p className="mt-2 text-2xl font-semibold text-white">
-            230 kV
+            {summary.averageVoltage.toFixed(1)} kV
           </p>
 
           <p className="mt-1 text-xs text-green-400">
@@ -43,7 +49,7 @@ export default function MonitorPage() {
           </p>
 
           <p className="mt-2 text-2xl font-semibold text-white">
-            4,352 MW
+            {Math.round(summary.totalLoad).toLocaleString()} MW
           </p>
 
           <p className="mt-1 text-xs text-blue-400">
@@ -57,7 +63,7 @@ export default function MonitorPage() {
           </p>
 
           <p className="mt-2 text-2xl font-semibold text-green-400">
-            Normal
+            {summary.risk.toUpperCase()}
           </p>
 
           <p className="mt-1 text-xs text-slate-400">

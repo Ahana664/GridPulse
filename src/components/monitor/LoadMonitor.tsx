@@ -9,18 +9,17 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-
-const loadData = [
-  { time: "12:00", load: 3850 },
-  { time: "12:05", load: 3980 },
-  { time: "12:10", load: 4050 },
-  { time: "12:15", load: 4180 },
-  { time: "12:20", load: 4250 },
-  { time: "12:25", load: 4320 },
-  { time: "12:30", load: 4352 },
-];
+import { useGridData } from "@/hooks/useGridData";
 
 export default function LoadMonitor() {
+  const { data: grid } = useGridData();
+  const loadData = grid.history.slice(-12).map((point) => ({
+    time: point.time.includes("T")
+      ? new Date(point.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : point.time,
+    load: point.actual,
+  }));
+
   return (
     <div className="rounded-xl border border-slate-800 bg-[#0b1728] p-5">
       <div className="mb-4">

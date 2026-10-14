@@ -14,6 +14,7 @@ import {
   User,
   Zap,
 } from "lucide-react";
+import { useGridData } from "@/hooks/useGridData";
 
 const menuItems = [
   { name: "Overview", href: "/", icon: Home },
@@ -29,6 +30,8 @@ const menuItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { data, isConnected, error } = useGridData();
+  const activeAlertCount = data.alerts.length;
 
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-slate-800 bg-[#06101e]">
@@ -75,7 +78,7 @@ export default function Sidebar() {
 
               {item.name === "Alerts" && (
                 <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
-                  3
+                  {activeAlertCount}
                 </span>
               )}
             </Link>
@@ -88,7 +91,7 @@ export default function Sidebar() {
         <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
           
           <div className="mb-2 flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
+            <span className={`h-2.5 w-2.5 rounded-full ${isConnected ? "bg-green-500" : "bg-amber-400"}`} />
 
             <span className="text-sm font-medium text-white">
               System Status
@@ -96,7 +99,7 @@ export default function Sidebar() {
           </div>
 
           <p className="text-xs text-green-400">
-            All Systems Operational
+            {isConnected ? "Live telemetry connected" : error ? "Demo data · API offline" : "Connecting to simulator…"}
           </p>
 
         </div>

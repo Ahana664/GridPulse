@@ -8,14 +8,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
-
-const data = [
-  { name: "Hydro", value: 1829, percentage: 38 },
-  { name: "Solar", value: 1058, percentage: 22 },
-  { name: "Wind", value: 866, percentage: 18 },
-  { name: "Thermal", value: 818, percentage: 17 },
-  { name: "Other", value: 241, percentage: 5 },
-];
+import { useGridData } from "@/hooks/useGridData";
 
 const COLORS = [
   "#3b82f6",
@@ -26,6 +19,14 @@ const COLORS = [
 ];
 
 export default function GenerationMixChart() {
+  const { data: grid } = useGridData();
+  const data = grid.nodes
+    .filter((node) => node.type === "generation")
+    .map((node) => ({ name: node.name, value: node.power, percentage: 0 }));
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  data.forEach((item) => {
+    item.percentage = total === 0 ? 0 : Math.round((item.value / total) * 100);
+  });
   return (
     <div className="h-[280px] w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -43,7 +44,7 @@ export default function GenerationMixChart() {
             {data.map((entry, index) => (
               <Cell
                 key={entry.name}
-                fill={COLORS[index]}
+                fill={COLORS[index % COLORS.length]}
               />
             ))}
           </Pie>

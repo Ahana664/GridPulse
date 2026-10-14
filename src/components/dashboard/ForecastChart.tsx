@@ -9,28 +9,19 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useGridData } from "@/hooks/useGridData";
 
-const forecastData = [
-  { time: "00:00", load: 3600 },
-  { time: "02:00", load: 3200 },
-  { time: "04:00", load: 3110 },
-  { time: "06:00", load: 3500 },
-  { time: "08:00", load: 3900 },
-  { time: "10:00", load: 4300 },
-  { time: "12:00", load: 4600 },
-  { time: "14:00", load: 4900 },
-  { time: "16:00", load: 5050 },
-  { time: "18:00", load: 5210 },
-  { time: "20:00", load: 4900 },
-  { time: "22:00", load: 4400 },
-  { time: "24:00", load: 3900 },
-];
+interface ForecastTooltipProps {
+  active?: boolean;
+  payload?: { value?: number | string | null }[];
+  label?: string | number;
+}
 
 function ForecastTooltip({
   active,
   payload,
   label,
-}: any) {
+}: ForecastTooltipProps) {
   if (!active || !payload || payload.length === 0) {
     return null;
   }
@@ -38,13 +29,13 @@ function ForecastTooltip({
   return (
     <div className="rounded-lg border border-slate-700 bg-[#0f172a] px-4 py-3 shadow-xl">
       <p className="mb-1 text-sm font-semibold text-white">
-        {label}
+        {String(label ?? "")}
       </p>
 
       <p className="text-sm text-emerald-400">
         Forecast Load:{" "}
         <span className="font-semibold text-white">
-          {payload[0].value} MW
+          {payload[0].value ?? "—"} MW
         </span>
       </p>
     </div>
@@ -52,6 +43,9 @@ function ForecastTooltip({
 }
 
 export default function ForecastChart() {
+  const { data } = useGridData();
+  const forecastData = data.forecast;
+
   return (
     <div className="h-[230px] w-full">
       <ResponsiveContainer width="100%" height="100%">

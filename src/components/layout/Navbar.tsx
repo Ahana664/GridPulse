@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Bell, ChevronDown } from "lucide-react";
+import { useGridData } from "@/hooks/useGridData";
 
 const pageInfo: Record<string, { title: string; description: string }> = {
   "/": {
@@ -61,6 +62,8 @@ const pageInfo: Record<string, { title: string; description: string }> = {
 
 export default function Navbar() {
   const pathname = usePathname();
+  const { data, isConnected, error } = useGridData();
+  const activeAlerts = data.alerts;
 
   const [showNotifications, setShowNotifications] =
     useState(false);
@@ -99,15 +102,15 @@ export default function Navbar() {
         ========================== */}
         <div className="hidden items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 md:flex">
 
-          <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
+          <span className={`h-2.5 w-2.5 rounded-full ${isConnected ? "bg-green-500" : "bg-amber-400"}`} />
 
           <div>
             <p className="text-sm font-medium text-white">
-              Live
+              {isConnected ? "Live" : error ? "Demo" : "Connecting"}
             </p>
 
             <p className="text-xs text-slate-400">
-              Grid monitoring active
+              {isConnected ? "Grid stream connected" : error ? "Using demo telemetry" : "Waiting for grid stream"}
             </p>
           </div>
 
@@ -131,8 +134,8 @@ export default function Navbar() {
             <Bell className="h-5 w-5" />
 
             {/* Notification Count */}
-            <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
-              3
+            <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
+              {activeAlerts.length}
             </span>
 
           </button>
@@ -153,74 +156,33 @@ export default function Navbar() {
                   </h3>
 
                   <p className="text-xs text-slate-400">
-                    3 recent alerts
+                    {activeAlerts.length} active alerts
                   </p>
                 </div>
 
                 <span className="rounded-full bg-red-500/10 px-2 py-1 text-xs text-red-400">
-                  3 New
+                  {activeAlerts.length} Active
                 </span>
 
               </div>
 
 
               {/* Notification List */}
-              <div className="divide-y divide-slate-800">
-
-
-                {/* Alert 1 */}
-                <div className="px-4 py-3 transition hover:bg-slate-800/40">
-
-                  <p className="text-sm font-medium text-red-400">
-                    High Load - North Zone
-                  </p>
-
-                  <p className="mt-1 text-xs text-slate-400">
-                    Load has reached 89% of capacity.
-                  </p>
-
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    11:43 AM
-                  </p>
-
-                </div>
-
-
-                {/* Alert 2 */}
-                <div className="px-4 py-3 transition hover:bg-slate-800/40">
-
-                  <p className="text-sm font-medium text-yellow-400">
-                    Voltage Fluctuation
-                  </p>
-
-                  <p className="mt-1 text-xs text-slate-400">
-                    Voltage variation detected in East Zone.
-                  </p>
-
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    11:37 AM
-                  </p>
-
-                </div>
-
-
-                {/* Alert 3 */}
-                <div className="px-4 py-3 transition hover:bg-slate-800/40">
-
-                  <p className="text-sm font-medium text-yellow-400">
-                    Frequency Deviation
-                  </p>
-
-                  <p className="mt-1 text-xs text-slate-400">
-                    Frequency deviated from nominal range.
-                  </p>
-
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    11:28 AM
-                  </p>
-
-                </div>
-
+              <div className="max-h-80 divide-y divide-slate-800 overflow-y-auto">
+                {activeAlerts.length === 0 && (
+                  <p className="px-4 py-5 text-sm text-slate-500">No active anomalies.</p>
+                )}
+                {activeAlerts.slice(0, 5).map((alert) => (
+                  <div key={alert.id} className="px-4 py-3 transition hover:bg-slate-800/40">
+                    <p className={`text-sm font-medium ${alert.type === "critical" ? "text-red-400" : "text-yellow-400"}`}>
+                      {alert.title}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">{alert.message}</p>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      {isConnected ? new Date(alert.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Demo sample"}
+                    </p>
+                  </div>
+                ))}
               </div>
 
 

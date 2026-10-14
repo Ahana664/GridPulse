@@ -10,28 +10,24 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useGridData } from "@/hooks/useGridData";
 
-const data = [
-  { time: "00:00", actual: 2700, forecast: null, capacity: 6000 },
-  { time: "02:00", actual: 2450, forecast: null, capacity: 6000 },
-  { time: "04:00", actual: 2600, forecast: null, capacity: 6000 },
-  { time: "06:00", actual: 3100, forecast: null, capacity: 6000 },
-  { time: "08:00", actual: 3700, forecast: null, capacity: 6000 },
-  { time: "10:00", actual: 4400, forecast: null, capacity: 6000 },
-  { time: "12:00", actual: 4800, forecast: 4800, capacity: 6000 },
-  { time: "14:00", actual: null, forecast: 4700, capacity: 6000 },
-  { time: "16:00", actual: null, forecast: 4550, capacity: 6000 },
-  { time: "18:00", actual: null, forecast: 4900, capacity: 6000 },
-  { time: "20:00", actual: null, forecast: 4500, capacity: 6000 },
-  { time: "22:00", actual: null, forecast: 4000, capacity: 6000 },
-  { time: "24:00", actual: null, forecast: 3700, capacity: 6000 },
-];
+interface LoadTooltipEntry {
+  dataKey?: string | number;
+  value?: number | string | null;
+}
+
+interface LoadTooltipProps {
+  active?: boolean;
+  payload?: LoadTooltipEntry[];
+  label?: string | number;
+}
 
 function CustomTooltip({
   active,
   payload,
   label,
-}: any) {
+}: LoadTooltipProps) {
   if (!active || !payload || payload.length === 0) {
     return null;
   }
@@ -39,10 +35,10 @@ function CustomTooltip({
   return (
     <div className="rounded-lg border border-slate-700 bg-[#0f172a] px-4 py-3 shadow-xl">
       <p className="mb-2 text-sm font-semibold text-white">
-        {label}
+        {String(label ?? "")}
       </p>
 
-      {payload.map((item: any) => {
+      {payload.map((item) => {
         let name = "Capacity";
 
         if (item.dataKey === "actual") {
@@ -79,6 +75,24 @@ function CustomTooltip({
 }
 
 export default function LoadChart() {
+  const { data: grid } = useGridData();
+  const data = [
+    ...grid.history.slice(-12).map((point) => ({
+      time: point.time.includes("T")
+        ? new Date(point.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
+        : point.time,
+      actual: point.actual,
+      forecast: null,
+      capacity: point.capacity,
+    })),
+    ...grid.forecast.map((point) => ({
+      time: point.time,
+      actual: null,
+      forecast: point.load,
+      capacity: 6_000,
+    })),
+  ];
+
   return (
     <div className="h-[320px] w-full">
       <ResponsiveContainer width="100%" height="100%">

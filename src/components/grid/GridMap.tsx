@@ -3,11 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 
-import {
-  gridConnections,
-  gridNodes,
-  GridNode,
-} from "@/data/mockGrid";
+import type { GridNode } from "@/data/mockGrid";
+import { useGridData } from "@/hooks/useGridData";
 
 const NODE_COLORS = {
   generation: "#22c55e",
@@ -23,6 +20,9 @@ const STATUS_COLORS = {
 
 export default function GridMap() {
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const { data } = useGridData();
+  const gridNodes = data.nodes;
+  const gridConnections = data.connections;
 
   const [selectedNode, setSelectedNode] =
     useState<GridNode | null>(null);
@@ -66,14 +66,24 @@ export default function GridMap() {
         y: 45,
       },
       {
+        name: "EAST ZONE",
+        x: 450,
+        y: 180,
+      },
+      {
         name: "CENTRAL ZONE",
         x: 450,
-        y: 275,
+        y: 305,
+      },
+      {
+        name: "WEST ZONE",
+        x: 450,
+        y: 430,
       },
       {
         name: "SOUTH ZONE",
-        x: 500,
-        y: 625,
+        x: 450,
+        y: 555,
       },
     ];
 
@@ -180,16 +190,19 @@ export default function GridMap() {
 
       // Node label
       group
-        group
-  .append("text")
-  .attr("y", 34)
-  .attr("text-anchor", "middle")
-  .attr("fill", "#cbd5e1")
-  .attr("font-size", 10)
-  .attr("font-weight", 500)
-  .text(node.name);
+        .append("text")
+        .attr("y", 34)
+        .attr("text-anchor", "middle")
+        .attr("fill", "#cbd5e1")
+        .attr("font-size", 10)
+        .attr("font-weight", 500)
+        .text(node.name);
     });
-  }, []);
+    return () => {
+      svg.selectAll("*").interrupt();
+      svg.on(".zoom", null);
+    };
+  }, [gridConnections, gridNodes]);
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-slate-800 bg-[#081426]">

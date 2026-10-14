@@ -8,14 +8,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
-
-const data = [
-  { name: "North Zone", value: 1135, percentage: 26 },
-  { name: "South Zone", value: 1202, percentage: 28 },
-  { name: "East Zone", value: 952, percentage: 22 },
-  { name: "Central Zone", value: 731, percentage: 17 },
-  { name: "West Zone", value: 332, percentage: 7 },
-];
+import { useGridData } from "@/hooks/useGridData";
 
 const COLORS = [
   "#22c55e",
@@ -26,6 +19,17 @@ const COLORS = [
 ];
 
 export default function RegionPieChart() {
+  const { data: grid } = useGridData();
+  const data = Array.from(
+    grid.nodes
+      .filter((node) => node.type === "load")
+      .reduce((zones, node) => zones.set(node.zone, (zones.get(node.zone) ?? 0) + node.power), new Map<string, number>()),
+    ([name, value]) => ({ name, value, percentage: 0 }),
+  );
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  data.forEach((item) => {
+    item.percentage = total === 0 ? 0 : Math.round((item.value / total) * 100);
+  });
   return (
     <div className="h-[280px] w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -43,7 +47,7 @@ export default function RegionPieChart() {
             {data.map((entry, index) => (
               <Cell
                 key={entry.name}
-                fill={COLORS[index]}
+                fill={COLORS[index % COLORS.length]}
               />
             ))}
           </Pie>
