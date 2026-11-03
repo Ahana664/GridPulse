@@ -115,7 +115,7 @@ async def lifespan(_: FastAPI):
     task = asyncio.create_task(telemetry_loop(), name="grid-telemetry-simulator")
     source_task = (
         asyncio.create_task(live_source_loop(), name="national-grid-source-poller")
-        if settings.grid_source_url
+        if (settings.grid_source_url or settings.supabase_url)
         else None
     )
     try:
@@ -177,9 +177,11 @@ async def get_live_data_status() -> dict[str, Any]:
             source_is_fresh = source_is_fresh and (datetime.now(timezone.utc) - reading_time).total_seconds() <= stale_after
         except ValueError:
             source_is_fresh = False
+    is_configured = bool(settings.grid_source_url or settings.supabase_url)
     return {
-        "configured": bool(settings.grid_source_url),
-        "status": "live" if source_is_fresh else "stale" if live_source_last_success else "waiting" if settings.grid_source_url else "not-configured",
+        "configured": is_configured,
+        "sourceType": "supabase" if settings.supabase_url else "http" if settings.grid_source_url else "none",
+        "status": "live" if source_is_fresh else "stale" if live_source_last_success else "waiting" if is_configured else "not-configured",
         "lastSuccess": live_source_last_success,
         "lastError": live_source_error,
         "reading": reading,
@@ -188,6 +190,23 @@ async def get_live_data_status() -> dict[str, Any]:
         "generationScale": snapshot.get("nationalGenerationScale"),
         "pollIntervalSeconds": settings.grid_source_poll_seconds,
     }
+
+
+@app.post("/api/v1/live-data/sync")
+async def trigger_live_data_sync() -> dict[str, Any]:
+    """Force an immediate pull from the live Supabase / PGCB source."""
+    global live_source_last_success, live_source_error
+    try:
+        from app.live_data import fetch_grid_reading
+        reading = await fetch_grid_reading()
+        grid.set_national_reading(reading)
+        await save_national_reading(reading)
+        live_source_last_success = datetime.now(timezone.utc).isoformat()
+        live_source_error = None
+        return {"status": "ok", "reading": reading}
+    except Exception as exc:
+        live_source_error = str(exc)
+        raise HTTPException(status_code=502, detail=f"Failed to sync live data: {exc}")
 
 
 @app.get("/api/v1/grid/hierarchy")

@@ -19,10 +19,14 @@ FIELD_ALIASES = {
     "generation_mw": {"generation", "totalgeneration", "totalgenerationmw", "generationmw", "totalmw", "supply"},
     "demand_mw": {"demand", "totaldemand", "totaldemandmw", "demandmw", "load", "loadmw"},
     "gas_mw": {"gas", "gasmw"},
+    "liquid_fuel_mw": {"liquidfuel", "liquidfuelmw", "fuel", "hfo", "hsd"},
     "coal_mw": {"coal", "coalmw"},
     "solar_mw": {"solar", "solarmw"},
     "hydro_mw": {"hydro", "hydromw"},
     "wind_mw": {"wind", "windmw"},
+    "india_mw": {"india", "indiamw"},
+    "nepal_mw": {"nepal", "nepalmw"},
+    "adani_mw": {"adani", "adanimw"},
     "imports_mw": {"imports", "import", "importsmw", "importmw"},
 }
 
@@ -158,12 +162,29 @@ def parse_grid_payload(content: str, content_type: str = "") -> dict[str, Any]:
                 break
     if not parsed:
         raise ValueError("Could not find generation or demand fields in the source response")
+    # Calculate imports if components (India, Nepal, Adani) are provided separately
+    import_subtotal = sum(
+        val
+        for val in (parsed.get("india_mw"), parsed.get("nepal_mw"), parsed.get("adani_mw"))
+        if val is not None
+    )
+    if import_subtotal > 0 and not parsed.get("imports_mw"):
+        parsed["imports_mw"] = import_subtotal
+
     if "generation_mw" not in parsed:
-        fuels = [parsed.get(f"{fuel}_mw") for fuel in ("gas", "coal", "solar", "hydro", "wind", "imports")]
+        fuels = [
+            parsed.get(f"{fuel}_mw")
+            for fuel in ("gas", "liquid_fuel", "coal", "solar", "hydro", "wind", "imports")
+        ]
         if any(value is not None for value in fuels):
             parsed["generation_mw"] = sum(value or 0 for value in fuels)
     if "generation_mw" not in parsed and "demand_mw" not in parsed:
         raise ValueError("The source response contains no usable MW readings")
+
+    # In national grid telemetry, generation matches active demand load
+    if "demand_mw" not in parsed and "generation_mw" in parsed:
+        parsed["demand_mw"] = parsed["generation_mw"]
+
     parsed.setdefault("observed_at", datetime.now(timezone.utc).isoformat())
     parsed["source"] = "pgcb"
     return parsed
@@ -194,8 +215,68 @@ def parse_grid_history_csv(content: str) -> list[dict[str, Any]]:
     return records
 
 
-async def fetch_grid_reading(url: str, timeout_seconds: float = 20) -> dict[str, Any]:
+async def fetch_grid_reading(url: str = "", timeout_seconds: float = 20) -> dict[str, Any]:
+    target_url = url or settings.grid_source_url
+
+    # Automatic Supabase integration
+    if not target_url and settings.supabase_url:
+        target_url = (
+            f"{settings.supabase_url.rstrip('/')}/rest/v1/{settings.supabase_table}"
+            "?select=*&order=datetime.desc&limit=1"
+        )
+
+    if not target_url:
+        raise ValueError("Neither GRID_SOURCE_URL nor SUPABASE_URL is configured")
+
+    headers = {"User-Agent": "GridPulse-Research-Dashboard/1.0"}
+    if ("supabase.co" in target_url or settings.supabase_url in target_url) and settings.supabase_key:
+        headers["apikey"] = settings.supabase_key
+        headers["Authorization"] = f"Bearer {settings.supabase_key}"
+
     async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=True) as client:
-        response = await client.get(url, headers={"User-Agent": "GridPulse-Research-Dashboard/1.0"})
+        response = await client.get(target_url, headers=headers)
         response.raise_for_status()
-    return parse_grid_payload(response.text, response.headers.get("content-type", ""))
+
+    parsed = parse_grid_payload(response.text, response.headers.get("content-type", ""))
+    if "supabase.co" in target_url:
+        parsed["source"] = "pgcb_supabase"
+    return parsed
+
+
+async def fetch_supabase_history(limit: int = 500, timeout_seconds: float = 30) -> list[dict[str, Any]]:
+    """Fetch recent historical demand records from Supabase for model training."""
+    if not settings.supabase_url:
+        return []
+    target_url = (
+        f"{settings.supabase_url.rstrip('/')}/rest/v1/{settings.supabase_table}"
+        f"?select=*&order=datetime.desc&limit={limit}"
+    )
+    headers = {"User-Agent": "GridPulse-Research-Dashboard/1.0"}
+    if settings.supabase_key:
+        headers["apikey"] = settings.supabase_key
+        headers["Authorization"] = f"Bearer {settings.supabase_key}"
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=True) as client:
+            response = await client.get(target_url, headers=headers)
+            if response.status_code != 200:
+                return []
+            data = response.json()
+            if not isinstance(data, list):
+                return []
+    except Exception as exc:
+        logger.warning("Could not fetch historical records from Supabase: %s", exc)
+        return []
+
+    records = []
+    for item in reversed(data):
+        try:
+            norm = parse_grid_payload(json.dumps(item), "application/json")
+            records.append({
+                "observed_at": norm["observed_at"],
+                "demand_mw": norm.get("demand_mw") or norm.get("generation_mw"),
+                "generation_mw": norm.get("generation_mw"),
+            })
+        except Exception:
+            continue
+    return records

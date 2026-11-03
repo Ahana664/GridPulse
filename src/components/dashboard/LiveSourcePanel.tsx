@@ -13,11 +13,13 @@ type SourceStatus = {
     generation_mw: number | null;
     demand_mw: number | null;
     gas_mw: number | null;
+    liquid_fuel_mw?: number | null;
     coal_mw: number | null;
     solar_mw: number | null;
     hydro_mw: number | null;
     wind_mw: number | null;
     imports_mw: number | null;
+    adani_mw?: number | null;
     measured: boolean;
   } | null;
 };
@@ -29,11 +31,13 @@ type HierarchyStatus = {
     generation_mw: number | null;
     demand_mw: number | null;
     gas_mw: number | null;
+    liquid_fuel_mw?: number | null;
     coal_mw: number | null;
     solar_mw: number | null;
     hydro_mw: number | null;
     wind_mw: number | null;
     imports_mw: number | null;
+    adani_mw?: number | null;
     measured: boolean;
   } | null;
 };

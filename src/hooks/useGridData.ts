@@ -72,11 +72,15 @@ export interface GridSnapshot {
     generation_mw?: number | null;
     demand_mw?: number | null;
     gas_mw?: number | null;
+    liquid_fuel_mw?: number | null;
     coal_mw?: number | null;
     solar_mw?: number | null;
     hydro_mw?: number | null;
     wind_mw?: number | null;
     imports_mw?: number | null;
+    india_mw?: number | null;
+    nepal_mw?: number | null;
+    adani_mw?: number | null;
   } | null;
   dataProvenance: "simulator-only" | "live-national-trend-scaled-simulation";
   nationalDemandScale: number;

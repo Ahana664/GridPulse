@@ -78,3 +78,22 @@ def test_historical_demand_trains_live_forecast_model(monkeypatch) -> None:
     forecast = forecasting.forecast_demand(4_000, 12, national_current_demand_mw=13_000)
     assert len(forecast) == 24
     assert all(point["load"] >= 0 for point in forecast)
+
+
+def test_parse_supabase_pgcb_payload_with_adani_and_imports() -> None:
+    # Simulates row directly as stored in Supabase hourly_generation table
+    supabase_row = (
+        '{"datetime":"2026-11-03T16:00:00+06:00",'
+        '"Generation(MW)":14250.0,"Gas":6500.0,"Liquid Fuel":1200.0,'
+        '"Coal":4300.0,"Hydro":180.0,"Solar":310.0,"Wind":12.0,'
+        '"India":980.0,"Nepal":40.0,"Adani":1050.0,"Remarks":null}'
+    )
+    reading = parse_grid_payload(supabase_row, "application/json")
+    assert reading["generation_mw"] == 14250.0
+    assert reading["demand_mw"] == 14250.0
+    assert reading["gas_mw"] == 6500.0
+    assert reading["liquid_fuel_mw"] == 1200.0
+    assert reading["coal_mw"] == 4300.0
+    # Imports should automatically aggregate India (980) + Nepal (40) + Adani (1050) = 2070
+    assert reading["imports_mw"] == 2070.0
+    assert reading["adani_mw"] == 1050.0

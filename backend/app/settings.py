@@ -8,6 +8,13 @@ class Settings:
     api_prefix = "/api/v1"
     tick_seconds = float(os.getenv("GRID_TICK_SECONDS", "3"))
     database_url = os.getenv("DATABASE_URL", "")
+    supabase_url = os.getenv("SUPABASE_URL", "")
+    supabase_key = (
+        os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+        or os.getenv("SUPABASE_ANON_KEY", "")
+        or os.getenv("SUPABASE_KEY", "")
+    )
+    supabase_table = os.getenv("SUPABASE_TABLE", "hourly_generation")
     grid_source_url = os.getenv("GRID_SOURCE_URL", "")
     grid_source_poll_seconds = max(60, int(os.getenv("GRID_SOURCE_POLL_SECONDS", "3600")))
     grid_source_timezone = os.getenv("GRID_SOURCE_TIMEZONE", "Asia/Dhaka")
