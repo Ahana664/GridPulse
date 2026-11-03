@@ -7,15 +7,15 @@ import type { GridNode } from "@/data/mockGrid";
 import { useGridData } from "@/hooks/useGridData";
 
 const NODE_COLORS = {
-  generation: "#22c55e",
-  load: "#3b82f6",
-  substation: "#e2e8f0",
+  generation: "#1f8a70",
+  load: "#c9871a",
+  substation: "#fbf8f1",
 };
 
 const STATUS_COLORS = {
-  normal: "#22c55e",
-  warning: "#f59e0b",
-  critical: "#ef4444",
+  normal: "#1f8a70",
+  warning: "#c9871a",
+  critical: "#e4572e",
 };
 
 export default function GridMap() {
@@ -55,7 +55,7 @@ export default function GridMap() {
       .append("rect")
       .attr("width", width)
       .attr("height", height)
-      .attr("fill", "#081426")
+      .attr("fill", "#f7f2e9")
       .attr("rx", 16);
 
     // Zone labels
@@ -96,7 +96,7 @@ export default function GridMap() {
       .attr("x", (d) => d.x)
       .attr("y", (d) => d.y)
       .attr("text-anchor", "middle")
-      .attr("fill", "#64748b")
+      .attr("fill", "#6b7785")
       .attr("font-size", 12)
       .attr("font-weight", 600)
       .text((d) => d.name);
@@ -134,7 +134,7 @@ export default function GridMap() {
       connectionsGroup
         .append("circle")
         .attr("r", 4)
-        .attr("fill", "#38bdf8")
+        .attr("fill", "#c9871a")
         .attr("cx", source.x)
         .attr("cy", source.y)
         .attr("opacity", 0.9)
@@ -193,7 +193,7 @@ export default function GridMap() {
         .append("text")
         .attr("y", 34)
         .attr("text-anchor", "middle")
-        .attr("fill", "#cbd5e1")
+        .attr("fill", "#1c2733")
         .attr("font-size", 10)
         .attr("font-weight", 500)
         .text(node.name);
@@ -205,7 +205,7 @@ export default function GridMap() {
   }, [gridConnections, gridNodes]);
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-slate-800 bg-[#081426]">
+    <div className="gp-d3-map relative overflow-hidden rounded-xl border border-slate-800 bg-[#081426]">
 
       <svg
         ref={svgRef}

@@ -66,6 +66,21 @@ export interface GridSnapshot {
     description: string;
   } | null;
   mlModel: string;
+  nationalData: {
+    observed_at: string;
+    source: string;
+    generation_mw?: number | null;
+    demand_mw?: number | null;
+    gas_mw?: number | null;
+    coal_mw?: number | null;
+    solar_mw?: number | null;
+    hydro_mw?: number | null;
+    wind_mw?: number | null;
+    imports_mw?: number | null;
+  } | null;
+  dataProvenance: "simulator-only" | "live-national-trend-scaled-simulation";
+  nationalDemandScale: number;
+  nationalGenerationScale: number;
 }
 
 const demoTimestamp = "2026-01-01T12:00:00.000Z";
@@ -113,6 +128,10 @@ const fallbackSnapshot: GridSnapshot = {
   scenario: null,
   scenarioResult: null,
   mlModel: "Demo data",
+  nationalData: null,
+  dataProvenance: "simulator-only",
+  nationalDemandScale: 1,
+  nationalGenerationScale: 1,
 };
 
 interface GridDataContextValue {
@@ -121,6 +140,7 @@ interface GridDataContextValue {
   lastUpdated: Date | null;
   error: string | null;
   runScenario: (scenario: ScenarioKey) => Promise<GridSnapshot>;
+  resetScenario: () => Promise<GridSnapshot>;
 }
 
 const GridDataContext = createContext<GridDataContextValue | null>(null);
@@ -199,9 +219,17 @@ export function GridDataProvider({ children }: { children: React.ReactNode }) {
     return snapshot;
   }, [acceptSnapshot]);
 
+  const resetScenario = useCallback(async () => {
+    const response = await fetch(`${apiBase}/simulations/reset`, { method: "POST" });
+    if (!response.ok) throw new Error("The simulation service could not reset the scenario.");
+    const snapshot = (await response.json()) as GridSnapshot;
+    acceptSnapshot(snapshot);
+    return snapshot;
+  }, [acceptSnapshot]);
+
   const value = useMemo(
-    () => ({ data, isConnected, lastUpdated, error, runScenario }),
-    [data, isConnected, lastUpdated, error, runScenario],
+    () => ({ data, isConnected, lastUpdated, error, runScenario, resetScenario }),
+    [data, isConnected, lastUpdated, error, runScenario, resetScenario],
   );
 
   return createElement(GridDataContext.Provider, { value }, children);

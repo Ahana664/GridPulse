@@ -1,174 +1,93 @@
 "use client";
 
 import { useState } from "react";
-
-import HeatWaveButton from "@/components/simulator/HeatWaveButton";
-import DemandSpikeButton from "@/components/simulator/DemandSpikeButton";
-import SolarFailureButton from "@/components/simulator/SolarFailureButton";
-import NodeFailureButton from "@/components/simulator/NodeFailureButton";
-import ScenarioResult from "@/components/simulator/ScenarioResult";
+import { Activity, RotateCcw, Sun, Thermometer, TrendingUp, Workflow } from "lucide-react";
 import { useGridData, type ScenarioKey } from "@/hooks/useGridData";
 
-type Scenario =
-  | "Heatwave"
-  | "Demand Spike"
-  | "Solar Failure"
-  | "Node Failure";
-
-const scenarioResults = {
-  Heatwave: {
-    loadImpact: "+18%",
-    frequency: "49.82 Hz",
-    generationImpact: "-4%",
-    risk: "High",
-  },
-  "Demand Spike": {
-    loadImpact: "+25%",
-    frequency: "49.70 Hz",
-    generationImpact: "-2%",
-    risk: "High",
-  },
-  "Solar Failure": {
-    loadImpact: "+8%",
-    frequency: "49.91 Hz",
-    generationImpact: "-22%",
-    risk: "High",
-  },
-  "Node Failure": {
-    loadImpact: "+12%",
-    frequency: "49.76 Hz",
-    generationImpact: "-15%",
-    risk: "Critical",
-  },
-};
+const scenarios: { key: ScenarioKey; title: string; detail: string; Icon: typeof Thermometer }[] = [
+  { key: "heatwave", title: "Heatwave", detail: "Raise virtual demand across load nodes.", Icon: Thermometer },
+  { key: "demand_spike", title: "Demand spike", detail: "Model a sudden step-up in consumer load.", Icon: TrendingUp },
+  { key: "solar_failure", title: "Solar failure", detail: "Reduce output from virtual solar nodes.", Icon: Sun },
+  { key: "node_failure", title: "Node failure", detail: "Simulate an outage at a virtual substation.", Icon: Workflow },
+];
 
 export default function SimulatorPage() {
-  const { data, runScenario } = useGridData();
-  const [selectedScenario, setSelectedScenario] =
-    useState<Scenario>("Heatwave");
-  const [isRunning, setIsRunning] = useState(false);
-  const [simulationError, setSimulationError] = useState<string | null>(null);
-  const scenarioKey: Record<Scenario, ScenarioKey> = {
-    Heatwave: "heatwave",
-    "Demand Spike": "demand_spike",
-    "Solar Failure": "solar_failure",
-    "Node Failure": "node_failure",
-  };
-  const result = data.scenarioResult
-    ? {
-        loadImpact: data.scenarioResult.loadImpact,
-        frequency: data.scenarioResult.frequency,
-        generationImpact: data.scenarioResult.generationImpact,
-        risk: data.scenarioResult.risk,
-      }
-    : scenarioResults.Heatwave;
+  const { data, runScenario, resetScenario } = useGridData();
+  const [selected, setSelected] = useState<ScenarioKey>("heatwave");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const result = data.scenarioResult?.name === selected ? data.scenarioResult : null;
 
-  const handleRunSimulation = async () => {
-    setIsRunning(true);
-    setSimulationError(null);
+  async function run() {
+    setPending(true);
+    setError("");
     try {
-      await runScenario(scenarioKey[selectedScenario]);
-    } catch (error) {
-      setSimulationError(error instanceof Error ? error.message : "Simulation failed.");
+      await runScenario(selected);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to run this scenario.");
     } finally {
-      setIsRunning(false);
+      setPending(false);
     }
-  };
+  }
+
+  async function reset() {
+    setPending(true);
+    setError("");
+    try {
+      await resetScenario();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to reset the simulation.");
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
-    <div className="p-6">
-      {/* Scenario Selection */}
-      <div className="rounded-xl border border-slate-800 bg-[#0b1728] p-5">
-        <div className="mb-5">
-          <h2 className="text-lg font-semibold text-white">
-            Select Shock Scenario
-          </h2>
-
-          <p className="mt-1 text-sm text-slate-400">
-            Choose a scenario to simulate its effect on the power grid.
-          </p>
+    <div className="gp-route-stack gp-simulator-page">
+      <section className="gp-card">
+        <header className="gp-card-heading">
+          <div><span className="gp-eyebrow">CONTROLLED EXPERIMENT / VIRTUAL GRID</span><h2 className="gp-serif gp-section-title">Choose a grid shock</h2></div>
+          <span className="gp-small-tag">SIMULATION ONLY</span>
+        </header>
+        <p className="gp-muted">Each scenario changes only the 20-node software model. It has no connection to real electrical equipment.</p>
+        <div className="gp-scenario-grid gp-simulator-options">
+          {scenarios.map(({ key, title, detail, Icon }) => (
+            <button key={key} type="button" className={`gp-scenario ${selected === key ? "is-active" : ""}`} aria-pressed={selected === key} disabled={pending} onClick={() => setSelected(key)}>
+              <span className="gp-scenario-icon"><Icon size={20} strokeWidth={1.7} /></span>
+              <span className="gp-serif">{title}</span>
+              <small>{detail}</small>
+            </button>
+          ))}
         </div>
-
-        {/* Scenario Buttons */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <HeatWaveButton
-            selected={selectedScenario === "Heatwave"}
-            onClick={() => setSelectedScenario("Heatwave")}
-          />
-
-          <DemandSpikeButton
-            selected={selectedScenario === "Demand Spike"}
-            onClick={() => setSelectedScenario("Demand Spike")}
-          />
-
-          <SolarFailureButton
-            selected={selectedScenario === "Solar Failure"}
-            onClick={() => setSelectedScenario("Solar Failure")}
-          />
-
-          <NodeFailureButton
-            selected={selectedScenario === "Node Failure"}
-            onClick={() => setSelectedScenario("Node Failure")}
-          />
-        </div>
-
-        {/* Selected Scenario */}
-        <div className="mt-5 flex flex-col gap-4 rounded-xl border border-slate-800 bg-[#081525] p-4 md:flex-row md:items-center md:justify-between">
+        <div className="gp-simulator-actions">
+          <p>Selected scenario <strong>{scenarios.find((scenario) => scenario.key === selected)?.title}</strong></p>
           <div>
-            <p className="text-sm font-medium text-white">
-              Selected Scenario
-            </p>
-
-            <p className="mt-1 text-sm text-blue-400">
-              {selectedScenario}
-            </p>
+            <button type="button" className="gp-button" disabled={pending || (!data.scenario && !data.scenarioResult)} onClick={() => void reset()}><RotateCcw size={15} /> Reset model</button>
+            <button type="button" className="gp-button gp-button-primary" disabled={pending} onClick={() => void run()}><Activity size={16} /> {pending ? "Working…" : "Run simulation"}</button>
           </div>
-
-          <button
-            onClick={handleRunSimulation}
-            disabled={isRunning}
-            className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-wait disabled:opacity-60"
-          >
-            {isRunning ? "Simulating…" : "Run Simulation"}
-          </button>
         </div>
-        {simulationError && (
-          <p role="alert" className="mt-3 text-sm text-red-400">{simulationError}</p>
+        {error && <p className="gp-error" role="alert">{error}</p>}
+      </section>
+
+      <section className="gp-card">
+        <header className="gp-card-heading">
+          <div><span className="gp-eyebrow">MEASURED MODEL RESPONSE</span><h2 className="gp-serif gp-section-title">Scenario results</h2></div>
+          <span className="gp-small-tag">{result ? "CALCULATED FROM API SNAPSHOT" : "AWAITING RUN"}</span>
+        </header>
+        {result ? (
+          <>
+            <p className="gp-muted">{result.description}</p>
+            <div className="gp-result-grid">
+              <article><span>DEMAND CHANGE</span><strong>{result.loadImpact}</strong></article>
+              <article><span>MODEL FREQUENCY</span><strong>{result.frequency}</strong></article>
+              <article><span>GENERATION CHANGE</span><strong>{result.generationImpact}</strong></article>
+              <article><span>ASSESSED RISK</span><strong>{result.risk}</strong></article>
+            </div>
+          </>
+        ) : (
+          <div className="gp-empty-state"><Activity size={20} /><div><strong>No result for this selection yet</strong><p>Run the scenario to calculate its effect from the current virtual-grid state.</p></div></div>
         )}
-      </div>
-
-      {/* Simulation Results */}
-      <div className="mt-7">
-        <div className="mb-5">
-          <h2 className="text-lg font-semibold text-white">
-            Simulation Results
-          </h2>
-
-          <p className="mt-1 text-sm text-slate-400">
-            {data.scenarioResult?.description ?? "Run a scenario to see its calculated impact on the live 20-node grid."}
-          </p>
-        </div>
-
-        <ScenarioResult
-          loadImpact={result.loadImpact}
-          frequency={result.frequency}
-          generationImpact={result.generationImpact}
-          risk={result.risk}
-        />
-      </div>
-
-      {/* Simulation Explanation */}
-      <div className="mt-6 rounded-xl border border-slate-800 bg-[#0b1728] p-5">
-        <h2 className="text-lg font-semibold text-white">
-          Scenario Analysis
-        </h2>
-
-        <p className="mt-2 text-sm leading-6 text-slate-400">
-          The simulator estimates how the selected grid shock could affect
-          electricity demand, generation, frequency stability, and overall
-          grid risk.
-        </p>
-      </div>
+      </section>
     </div>
   );
 }

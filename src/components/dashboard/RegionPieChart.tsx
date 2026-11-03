@@ -11,11 +11,11 @@ import {
 import { useGridData } from "@/hooks/useGridData";
 
 const COLORS = [
-  "#22c55e",
-  "#06b6d4",
-  "#eab308",
-  "#8b5cf6",
-  "#6366f1",
+  "#1f8a70",
+  "#c9871a",
+  "#547f70",
+  "#e4572e",
+  "#6b7785",
 ];
 
 export default function RegionPieChart() {
@@ -54,10 +54,10 @@ export default function RegionPieChart() {
 
           <Tooltip
             contentStyle={{
-              backgroundColor: "#0f172a",
-              border: "1px solid #334155",
+              backgroundColor: "#fbf8f1",
+              border: "1px solid #1c273355",
               borderRadius: "8px",
-              color: "#fff",
+              color: "#1c2733",
             }}
             formatter={(value) => [`${value} MW`, "Load"]}
           />
@@ -68,7 +68,7 @@ export default function RegionPieChart() {
             align="right"
             wrapperStyle={{
               fontSize: "12px",
-              color: "#94a3b8",
+              color: "#6b7785",
             }}
             formatter={(value) => {
               const item = data.find(

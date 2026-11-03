@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from app.forecasting import forecast_demand
+from app.settings import settings
 
 NODE_DEFINITIONS = [
     ("GEN-N1", "North Solar Array", "generation", "North Zone", 120, 80, 230, 1_250, 80),
@@ -100,6 +101,9 @@ class GridSimulator:
         self.scenario: str | None = None
         self.scenario_ticks = 0
         self.scenario_result: dict[str, Any] | None = None
+        self.national_reading: dict[str, Any] | None = None
+        self.demand_scale = 1.0
+        self.generation_scale = 1.0
         self.tick_count = 0
         for offset in range(23, -1, -1):
             hour = (datetime.now(timezone.utc).hour - offset) % 24
@@ -121,6 +125,20 @@ class GridSimulator:
         self.scenario = scenario
         self.scenario_ticks = 12
 
+    def set_national_reading(self, reading: dict[str, Any]) -> None:
+        self.national_reading = dict(reading)
+        baseline = max(settings.grid_national_baseline_demand_mw, 1.0)
+        demand = reading.get("demand_mw")
+        generation = reading.get("generation_mw")
+        self.demand_scale = min(1.25, max(0.75, float(demand) / baseline)) if demand is not None else 1.0
+        self.generation_scale = min(1.25, max(0.75, float(generation) / baseline)) if generation is not None else 1.0
+
+    def reset_scenario(self) -> dict[str, Any]:
+        self.scenario = None
+        self.scenario_ticks = 0
+        self.scenario_result = None
+        return self.tick()
+
     def _scenario_adjustments(self, node: dict[str, Any]) -> tuple[float, float]:
         load_delta = 0.0
         generation_multiplier = 1.0
@@ -141,11 +159,11 @@ class GridSimulator:
             load_delta, generation_multiplier = self._scenario_adjustments(node)
             jitter = self.rng.uniform(-1.8, 1.8)
             if node["type"] == "generation":
-                output_factor = (0.78 + self.rng.uniform(-0.025, 0.025)) * generation_multiplier
+                output_factor = (0.78 + self.rng.uniform(-0.025, 0.025)) * generation_multiplier * self.generation_scale
                 node["power"] = round(node["capacity"] * output_factor, 1)
                 node["load"] = round(min(100.0, max(0.0, 80 + jitter)), 1)
             elif node["type"] == "load":
-                node["load"] = round(min(100.0, max(20.0, node["baseLoad"] + load_delta + jitter)), 1)
+                node["load"] = round(min(100.0, max(20.0, node["baseLoad"] * self.demand_scale + load_delta + jitter)), 1)
                 node["power"] = round(node["capacity"] * node["load"] / 100, 1)
             else:
                 node["load"] = round(min(100.0, max(20.0, node["baseLoad"] + jitter)), 1)
@@ -272,7 +290,8 @@ class GridSimulator:
         health = round(max(0, 100 - sum(node["status"] != "normal" for node in self.nodes) * 1.2 - max(0, max_load - 85) * 0.5), 1)
         risk = "critical" if max_load >= 98 or abs(frequency - 50) >= 0.15 else "high" if max_load >= 92 else "moderate" if max_load >= 85 else "low"
         hour = datetime.now(timezone.utc).hour
-        forecast = forecast_demand(total_load, hour)
+        national_demand = self.national_reading.get("demand_mw") if self.national_reading else None
+        forecast = forecast_demand(total_load, hour, national_current_demand_mw=national_demand)
         series = list(self.history)
         if series:
             series[-1] = {**series[-1], "forecast": forecast[0]["load"]}
@@ -298,6 +317,10 @@ class GridSimulator:
             "scenario": self.scenario,
             "scenarioResult": self.scenario_result,
             "mlModel": _get_model_name(),
+            "nationalData": self.national_reading,
+            "dataProvenance": "live-national-trend-scaled-simulation" if self.national_reading else "simulator-only",
+            "nationalDemandScale": round(self.demand_scale, 3),
+            "nationalGenerationScale": round(self.generation_scale, 3),
         }
 
     def run_scenario(self, scenario: str) -> dict[str, Any]:
@@ -334,7 +357,6 @@ class GridSimulator:
 
 
 def _get_model_name() -> str:
-    # Expose the model choice without leaking its training data or estimator object.
-    from app.forecasting import XGBRegressor
+    from app.forecasting import get_forecast_model_name
 
-    return "xgboost" if XGBRegressor is not None else "sklearn"
+    return get_forecast_model_name()

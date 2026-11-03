@@ -31,6 +31,13 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       DATABASE_URL: postgresql+asyncpg://gridpulse:gridpulse_dev@timescaledb:5432/gridpulse
+      GRID_SOURCE_URL: ${GRID_SOURCE_URL:-}
+      GRID_SOURCE_POLL_SECONDS: ${GRID_SOURCE_POLL_SECONDS:-3600}
+      GRID_SOURCE_TIMEZONE: ${GRID_SOURCE_TIMEZONE:-Asia/Dhaka}
+      GRID_NATIONAL_BASELINE_DEMAND_MW: ${GRID_NATIONAL_BASELINE_DEMAND_MW:-15000}
+      GRID_PERSIST_INTERVAL_SECONDS: ${GRID_PERSIST_INTERVAL_SECONDS:-300}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       REDIS_URL: redis://redis:6379/0
       CELERY_ENABLED: "true"
       GRID_TICK_SECONDS: "3"

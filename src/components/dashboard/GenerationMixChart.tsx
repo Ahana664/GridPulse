@@ -11,11 +11,11 @@ import {
 import { useGridData } from "@/hooks/useGridData";
 
 const COLORS = [
-  "#3b82f6",
-  "#eab308",
-  "#22c55e",
-  "#f97316",
-  "#8b5cf6",
+  "#1f8a70",
+  "#c9871a",
+  "#547f70",
+  "#e4572e",
+  "#6b7785",
 ];
 
 export default function GenerationMixChart() {
@@ -51,10 +51,10 @@ export default function GenerationMixChart() {
 
           <Tooltip
             contentStyle={{
-              backgroundColor: "#0f172a",
-              border: "1px solid #334155",
+              backgroundColor: "#fbf8f1",
+              border: "1px solid #1c273355",
               borderRadius: "8px",
-              color: "#fff",
+              color: "#1c2733",
             }}
             formatter={(value) => [`${value} MW`, "Generation"]}
           />
@@ -67,7 +67,7 @@ export default function GenerationMixChart() {
     top: "50%",
     transform: "translateY(-50%)",
     fontSize: "12px",
-    color: "#94a3b8",
+    color: "#6b7785",
   }}
   formatter={(value) => {
     const item = data.find((entry) => entry.name === value);

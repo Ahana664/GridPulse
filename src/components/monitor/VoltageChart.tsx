@@ -21,7 +21,7 @@ export default function VoltageChart() {
   }));
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-[#0b1728] p-5">
+    <div className="rounded-xl border border-slate-800 bg-[#0b1728] p-5 gp-route-card">
       <div className="mb-4">
         <h2 className="text-lg font-semibold text-white">
           Voltage Trend
@@ -45,33 +45,33 @@ export default function VoltageChart() {
           >
             <CartesianGrid
               strokeDasharray="3 3"
-              stroke="#1e293b"
+              stroke="#1c273322"
             />
 
             <XAxis
               dataKey="time"
-              tick={{ fill: "#94a3b8", fontSize: 12 }}
-              axisLine={{ stroke: "#334155" }}
+              tick={{ fill: "#6b7785", fontSize: 12 }}
+              axisLine={{ stroke: "#1c273344" }}
               tickLine={false}
             />
 
             <YAxis
               domain={[220, 235]}
-              tick={{ fill: "#94a3b8", fontSize: 12 }}
-              axisLine={{ stroke: "#334155" }}
+              tick={{ fill: "#6b7785", fontSize: 12 }}
+              axisLine={{ stroke: "#1c273344" }}
               tickLine={false}
               unit=" kV"
             />
 
             <Tooltip
               contentStyle={{
-                backgroundColor: "#0f1d31",
-                border: "1px solid #334155",
+                backgroundColor: "#fbf8f1",
+                border: "1px solid #1c273355",
                 borderRadius: "8px",
-                color: "#fff",
+                color: "#1c2733",
               }}
               labelStyle={{
-                color: "#94a3b8",
+                color: "#6b7785",
               }}
               formatter={(value) => [`${value} kV`, "Voltage"]}
             />
@@ -79,7 +79,7 @@ export default function VoltageChart() {
             <Line
               type="monotone"
               dataKey="voltage"
-              stroke="#22c55e"
+              stroke="#1f8a70"
               strokeWidth={2}
               dot={{ r: 3 }}
               activeDot={{ r: 5 }}

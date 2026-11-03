@@ -33,7 +33,7 @@ function CustomTooltip({
   }
 
   return (
-    <div className="rounded-lg border border-slate-700 bg-[#0f172a] px-4 py-3 shadow-xl">
+    <div className="rounded-lg border border-slate-700 bg-[#0f172a] px-4 py-3 shadow-xl gp-chart-tooltip">
       <p className="mb-2 text-sm font-semibold text-white">
         {String(label ?? "")}
       </p>
@@ -107,19 +107,19 @@ export default function LoadChart() {
         >
           <CartesianGrid
             strokeDasharray="3 3"
-            stroke="#1e293b"
+            stroke="#1c273322"
           />
 
           <XAxis
             dataKey="time"
-            tick={{ fill: "#94a3b8", fontSize: 12 }}
-            axisLine={{ stroke: "#334155" }}
+            tick={{ fill: "#6b7785", fontSize: 12 }}
+            axisLine={{ stroke: "#1c273344" }}
             tickLine={false}
           />
 
           <YAxis
             domain={[0, 6000]}
-            tick={{ fill: "#94a3b8", fontSize: 12 }}
+            tick={{ fill: "#6b7785", fontSize: 12 }}
             axisLine={false}
             tickLine={false}
             tickFormatter={(value) => `${value / 1000}K`}
@@ -131,7 +131,7 @@ export default function LoadChart() {
 
           <Legend
             wrapperStyle={{
-              color: "#94a3b8",
+              color: "#6b7785",
               fontSize: "12px",
             }}
           />
@@ -140,7 +140,7 @@ export default function LoadChart() {
             type="monotone"
             dataKey="actual"
             name="Actual Load"
-            stroke="#3b82f6"
+            stroke="#1f8a70"
             strokeWidth={2.5}
             dot={false}
             connectNulls={false}
@@ -150,7 +150,7 @@ export default function LoadChart() {
             type="monotone"
             dataKey="forecast"
             name="Forecast Load"
-            stroke="#22d3ee"
+            stroke="#c9871a"
             strokeWidth={2}
             strokeDasharray="6 4"
             dot={false}

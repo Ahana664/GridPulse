@@ -48,13 +48,13 @@ export default function DemandForecast() {
               >
                 <stop
                   offset="5%"
-                  stopColor="#8b5cf6"
+                  stopColor="#1f8a70"
                   stopOpacity={0.35}
                 />
 
                 <stop
                   offset="95%"
-                  stopColor="#8b5cf6"
+                  stopColor="#1f8a70"
                   stopOpacity={0}
                 />
               </linearGradient>
@@ -62,33 +62,33 @@ export default function DemandForecast() {
 
             <CartesianGrid
               strokeDasharray="3 3"
-              stroke="#1e293b"
+              stroke="#1c273322"
             />
 
             <XAxis
               dataKey="time"
-              tick={{ fill: "#94a3b8", fontSize: 12 }}
-              axisLine={{ stroke: "#334155" }}
+              tick={{ fill: "#6b7785", fontSize: 12 }}
+              axisLine={{ stroke: "#1c273344" }}
               tickLine={false}
             />
 
             <YAxis
               domain={[2500, 5000]}
-              tick={{ fill: "#94a3b8", fontSize: 12 }}
-              axisLine={{ stroke: "#334155" }}
+              tick={{ fill: "#6b7785", fontSize: 12 }}
+              axisLine={{ stroke: "#1c273344" }}
               tickLine={false}
               unit=" MW"
             />
 
             <Tooltip
               contentStyle={{
-                backgroundColor: "#0f1d31",
-                border: "1px solid #334155",
+                backgroundColor: "#fbf8f1",
+                border: "1px solid #1c273355",
                 borderRadius: "8px",
-                color: "#fff",
+                color: "#1c2733",
               }}
               labelStyle={{
-                color: "#94a3b8",
+                color: "#6b7785",
               }}
               formatter={(value) => [`${value} MW`, "Forecast Load"]}
             />
@@ -96,7 +96,7 @@ export default function DemandForecast() {
             <Area
               type="monotone"
               dataKey="load"
-              stroke="#8b5cf6"
+              stroke="#1f8a70"
               strokeWidth={2}
               fill="url(#forecastGradient)"
               activeDot={{ r: 5 }}

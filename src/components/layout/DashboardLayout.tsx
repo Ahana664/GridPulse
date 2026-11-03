@@ -10,13 +10,12 @@ export default function DashboardLayout({
   children,
 }: DashboardLayoutProps) {
   return (
-    <div className="min-h-screen bg-[#07111f] text-white">
-      
+    <div className="dashboard-shell">
       <GridDataProvider>
         <Sidebar />
-        <div className="ml-64 min-h-screen">
+        <div className="dashboard-main">
           <Navbar />
-          <main className="p-8">{children}</main>
+          <main className="gp-page-container">{children}</main>
         </div>
       </GridDataProvider>
     </div>
