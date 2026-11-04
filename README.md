@@ -17,7 +17,7 @@ GridPulse is an academic smart-grid operations simulator and dashboard. It model
 - [Safety and intended use](#safety-and-intended-use)
 
 ## Capabilities
-
+ 
 - **Overview dashboard:** generation, load, frequency, health, regional demand, generation mix, forecasts, alerts, and a live topology map.
 - **Grid map:** interactive D3 visualization of nodes and connections, with node details and animated flows.
 - **Live monitoring:** simulated node and line telemetry, voltage/load charts, and a recent telemetry table.
