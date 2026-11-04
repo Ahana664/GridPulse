@@ -1,6 +1,18 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+_backend_dir = Path(__file__).resolve().parents[1]
+_repo_dir = _backend_dir.parent
+# Keep credentials out of source while allowing both Docker Compose's root .env
+# and a local backend/.env file to configure the API. Existing process variables win.
+# Environment values are read at import time; restart the API after changing either file.
+load_dotenv(_repo_dir / ".env", override=False)
+load_dotenv(_backend_dir / ".env", override=False)
 
 
 class Settings:
@@ -21,7 +33,7 @@ class Settings:
     grid_national_baseline_demand_mw = float(os.getenv("GRID_NATIONAL_BASELINE_DEMAND_MW", "15000"))
     grid_persist_interval_seconds = max(30, int(os.getenv("GRID_PERSIST_INTERVAL_SECONDS", "300")))
     gemini_api_key = os.getenv("GEMINI_API_KEY", "")
-    gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    gemini_model = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     celery_enabled = os.getenv("CELERY_ENABLED", "false").lower() == "true"
     cors_origins = [

@@ -28,7 +28,7 @@ export default function GridMapPage() {
           </h1>
           <p className="text-sm text-[#6b7785] mt-0.5">
             {activeTab === "hierarchy"
-              ? "Browse the National Root → 8 Regional Hubs → District Substations → Local Feeders with proportional load scaling."
+              ? "Browse national, regional, district, and feeder topology. Measurements and calibrated allocation appear when connected and available."
               : activeTab === "topology"
                 ? "Interactive visual network map showing simulated power flows, substation lines, and real-time node voltages."
                 : "Generation sources and cross-border imports cascading down to regional consumption hubs."}

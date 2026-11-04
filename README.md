@@ -68,6 +68,8 @@ The API owns the virtual 20-node simulator and emits a full snapshot on a config
 
 The national grid page uses a **separate database-backed hierarchy**: national root → eight Bangladesh administrative division hubs → source-provided district substations → source-provided feeder clusters. PostgreSQL stores node identity and `parent_node_id` separately from time-series readings. Only the root and division names are initialized locally; no district, feeder, capacity, demand, or generation values are invented. The hierarchy browser drills into the next tier and labels nodes with no source record as unmeasured. Optional division weights are NULL by default; only when all eight explicit weights sum to 100% can the system show a clearly marked proportional estimate from a national aggregate. A real division reading always takes precedence. The original 20-node digital twin remains clearly labeled simulator data.
 
+**There are two distinct database settings:** `SUPABASE_URL` plus a Supabase API key reads the scraper's `hourly_generation` table through the Supabase REST API. At API startup, the most recent 500 rows are used for forecast training and upserted into `DATABASE_URL` when persistence is connected; each subsequent poll stores the latest row. `DATABASE_URL` is where GridPulse persists its own national history, hierarchy, and simulator telemetry. If `DATABASE_URL` is unset or unreachable, live national readings can still feed the simulator, but database-backed history and the hierarchy view remain unavailable. Set `DATABASE_URL` to Supabase's PostgreSQL connection URI if you want those GridPulse records stored in the Supabase project; otherwise Docker Compose uses its local TimescaleDB.
+
 ## Run with Docker Compose
 
 Prerequisites: Docker Engine or Docker Desktop with the Compose plugin. From the repository root:
@@ -85,7 +87,7 @@ Open:
 
 Compose starts the frontend, API, telemetry simulator, Redis, Celery worker, and TimescaleDB. The database volume is named `gridpulse-db`. Stop services while preserving its contents with `docker compose down`. To remove the database volume too, use `docker compose down -v` (this deletes local telemetry data).
 
-The Compose file uses a development-only database password. Do not reuse it outside a local environment. To configure PGCB/Gemini values for Compose, copy `.env.example` to `.env` and set only the values you have; the API key remains backend-only.
+The Compose file uses a development-only database password. Do not reuse it outside a local environment. To configure Supabase/Gemini values for Compose, copy `.env.example` to the repository-root `.env` and set the values there; Compose passes backend settings to the API container. For a local Uvicorn run, copy `.env.example` to `backend/.env` instead. The backend also loads a repository-root `.env` when run locally. Restart the API after changing credentials. Never commit either `.env` file or put backend credentials in `NEXT_PUBLIC_*` variables.
 
 ## Run locally without Docker
 
@@ -102,7 +104,7 @@ The development site is <http://localhost:3000>. For a production build, run `np
 
 ### Backend API
 
-From the repository root, create an isolated Python environment and install the backend requirements:
+From the repository root, create an isolated Python environment and install the backend requirements. Copy `.env.example` to `backend/.env` and edit the backend settings before starting the API if you want live data, persisted history, or Gemini analysis:
 
 ```bash
 python3.12 -m venv backend/.venv
@@ -140,7 +142,7 @@ The seed command verifies and prints the row count, distinct hours, node count, 
 
 ## Configuration
 
-The root [.env.example](.env.example) documents the available settings. Copy it to `.env.local` for Next.js, and export the backend values in the shell that runs Uvicorn (or configure them in your process manager). `.env*` files are ignored by Git except for `.env.example`.
+The root [.env.example](.env.example) documents the available settings. Copy it to `.env.local` only if you need to override frontend URLs; copy it to `backend/.env` for local Uvicorn or the repository-root `.env` for Docker Compose. `.env*` files are ignored by Git except for `.env.example`.
 
 | Variable                           | Used by        | Default                                       | Purpose                                                                                                     |
 | ---------------------------------- | -------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -148,22 +150,36 @@ The root [.env.example](.env.example) documents the available settings. Copy it 
 | `NEXT_PUBLIC_WS_URL`               | Frontend       | `ws://localhost:8000/api/v1/ws/live`          | Live telemetry WebSocket URL, compiled into the frontend bundle.                                            |
 | `DATABASE_URL`                     | Backend        | unset                                         | Async SQLAlchemy connection URL, for example `postgresql+asyncpg://user:password@localhost:5432/gridpulse`. |
 | `GRID_SOURCE_URL`                  | Backend        | unset                                         | Public PGCB JSON, CSV, or readable HTML-table endpoint. Polling is disabled when unset.                     |
+| `SUPABASE_URL`                     | Backend        | unset                                         | Supabase project URL; reads the latest row and history from `SUPABASE_TABLE` using the REST API.            |
+| `SUPABASE_SERVICE_ROLE_KEY`        | Backend        | unset                                         | Backend-only Supabase API key. Keep secret; never expose it to the browser.                                 |
+| `SUPABASE_ANON_KEY`                | Backend        | unset                                         | Optional alternative to the service-role key when the table's RLS policy allows reads.                      |
+| `SUPABASE_TABLE`                   | Backend        | `hourly_generation`                           | Supabase REST table/view name; the current query expects a sortable `datetime` column.                      |
 | `GRID_SOURCE_POLL_SECONDS`         | Backend        | `3600`                                        | Poll interval in seconds (minimum 60).                                                                      |
 | `GRID_SOURCE_TIMEZONE`             | Backend        | `Asia/Dhaka`                                  | Timezone used for naive timestamps in PGCB feeds and imported history.                                      |
 | `GRID_NATIONAL_BASELINE_DEMAND_MW` | Backend        | `15000`                                       | Reference demand used to calculate bounded national-to-simulation trend scaling.                            |
 | `GRID_PERSIST_INTERVAL_SECONDS`    | Backend        | `300`                                         | Minimum interval between persisted 20-node snapshots; national source rows are stored at each poll.         |
 | `GEMINI_API_KEY`                   | Backend        | unset                                         | Optional Gemini key for operator-triggered analysis. Never expose it to the browser.                        |
-| `GEMINI_MODEL`                     | Backend        | `gemini-2.5-flash`                            | Gemini model used by the advisory endpoint.                                                                 |
+| `GEMINI_MODEL`                     | Backend        | `gemini-3-flash-preview`                      | Gemini model used by the advisory endpoint.                                                                 |
 | `REDIS_URL`                        | Backend/worker | `redis://localhost:6379/0`                    | Celery broker and result backend.                                                                           |
 | `CELERY_ENABLED`                   | Backend        | `false`                                       | Queue report generation instead of generating reports inline.                                               |
 | `GRID_TICK_SECONDS`                | Backend        | `3`                                           | Telemetry simulator interval in seconds (minimum effective interval: one second).                           |
 | `CORS_ORIGINS`                     | Backend        | `http://localhost:3000,http://127.0.0.1:3000` | Comma-separated browser origins allowed by the API.                                                         |
 
-In Docker Compose, frontend URLs are supplied as Docker build arguments, while the backend service URLs are set in the Compose service environment.
+In Docker Compose, frontend URLs are supplied as Docker build arguments, while the backend settings are passed from the repository-root `.env` into the API container. The frontend calls `POST /api/v1/live-data/sync` when you select **Sync live source now**; it never receives Supabase or Gemini credentials. Gemini is called only when you select **Run analysis**.
+
+### Configure Supabase and Gemini credentials
+
+1. Copy the tracked `.env.example` to `backend/.env` for local Uvicorn, or to the repository-root `.env` for Docker Compose.
+2. Set `SUPABASE_URL` to the project URL from Supabase, `SUPABASE_SERVICE_ROLE_KEY` to a backend-only key (or `SUPABASE_ANON_KEY` if table read access is explicitly allowed by RLS), and keep `SUPABASE_TABLE=hourly_generation` unless your table has another name.
+3. Set `GEMINI_API_KEY` to a key enabled for the Gemini API. `GEMINI_MODEL` defaults to `gemini-3-flash-preview`; model availability and quotas can change. The key stays on the backend; the frontend only requests the backend's analysis endpoint.
+4. For historical persistence and the hierarchy explorer, set `DATABASE_URL` to a PostgreSQL connection. It can be the local Compose database (default under Docker) or a Supabase PostgreSQL URI converted to `postgresql+asyncpg://...` with `?sslmode=require` as appropriate. The REST API key is not a PostgreSQL password.
+5. Restart the API/container, then check `http://localhost:8000/api/v1/health`, `http://localhost:8000/api/v1/live-data`, and `http://localhost:8000/docs`. The health response reports whether Gemini and the source are configured without revealing credentials. Use the dashboard's sync button to test an immediate read.
+
+The Supabase REST request orders rows by `datetime` and the payload parser recognizes the project scraper's generation/fuel columns. Ensure the table has a `datetime` column and its API/RLS permissions allow the selected key to `SELECT`. A successful REST read does not itself configure PostgreSQL persistence; that is the separate `DATABASE_URL` setting above.
 
 ### Supabase PostgreSQL
 
-GridPulse connects to Supabase through SQLAlchemy/asyncpg, not through a browser-side Supabase client. Copy the PostgreSQL connection URI from Supabase's **Connect** panel and set it as the backend `DATABASE_URL`; use the SQLAlchemy asyncpg driver form, for example `postgresql+asyncpg://.../postgres?sslmode=require`. The backend normalizes standard `postgresql://` URIs too. Use the Supabase session pooler if the deployment environment cannot reach the direct database host. Do not commit credentials. The schema uses standard PostgreSQL tables, so the Supabase database does not need the TimescaleDB extension; the local Compose stack remains TimescaleDB-backed.
+For GridPulse persistence, connect to Supabase PostgreSQL through SQLAlchemy/asyncpg, not through a browser-side client. Copy the PostgreSQL connection URI from Supabase's **Connect** panel and set it as the backend `DATABASE_URL`; use the SQLAlchemy asyncpg driver form, for example `postgresql+asyncpg://.../postgres?sslmode=require`. Separately, `SUPABASE_URL` and an API key read the scraper table through Supabase REST. The backend normalizes standard `postgresql://` URIs too. Use the Supabase session pooler if the deployment environment cannot reach the direct database host. Do not commit credentials. The schema uses standard PostgreSQL tables, so the Supabase database does not need the TimescaleDB extension; the local Compose stack remains TimescaleDB-backed.
 
 ### PGCB source and historical backfill
 

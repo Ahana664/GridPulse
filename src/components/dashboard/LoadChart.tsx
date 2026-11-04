@@ -11,6 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import { useGridData } from "@/hooks/useGridData";
+import type { DashboardMode, RealDashboardData } from "@/types/realDashboard";
 
 interface LoadTooltipEntry {
   dataKey?: string | number;
@@ -21,12 +22,14 @@ interface LoadTooltipProps {
   active?: boolean;
   payload?: LoadTooltipEntry[];
   label?: string | number;
+  mode?: DashboardMode;
 }
 
 function CustomTooltip({
   active,
   payload,
   label,
+  mode = "simulated",
 }: LoadTooltipProps) {
   if (!active || !payload || payload.length === 0) {
     return null;
@@ -42,11 +45,11 @@ function CustomTooltip({
         let name = "Capacity";
 
         if (item.dataKey === "actual") {
-          name = "Actual Load";
+          name = mode === "real" ? "PGCB Generation" : "Actual Load";
         }
 
         if (item.dataKey === "forecast") {
-          name = "Forecast Load";
+          name = mode === "real" ? "Generation Forecast" : "Forecast Load";
         }
 
         if (item.dataKey === "capacity") {
@@ -74,9 +77,10 @@ function CustomTooltip({
   );
 }
 
-export default function LoadChart() {
+export default function LoadChart({ mode = "simulated", realData }: { mode?: DashboardMode; realData?: RealDashboardData | null }) {
   const { data: grid } = useGridData();
-  const data = [
+  type ChartPoint = { time: string; actual: number | null; forecast: number | null; capacity: number | null };
+  const simulatedSeries: ChartPoint[] = [
     ...grid.history.slice(-12).map((point) => ({
       time: point.time.includes("T")
         ? new Date(point.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
@@ -92,6 +96,21 @@ export default function LoadChart() {
       capacity: 6_000,
     })),
   ];
+  const realSeries: ChartPoint[] = [
+    ...(realData?.history ?? []).slice(-36).map((point) => ({
+      time: new Date(point.observed_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
+      actual: point.actual_mw ?? (point.demand_is_inferred ? point.generation_mw : point.demand_mw) ?? null,
+      forecast: null,
+      capacity: null,
+    })),
+    ...(realData?.forecast ?? []).map((point) => ({
+      time: point.time,
+      actual: null,
+      forecast: point.load,
+      capacity: null,
+    })),
+  ];
+  const data = mode === "real" ? realSeries : simulatedSeries;
 
   return (
     <div className="h-[320px] w-full">
@@ -118,16 +137,14 @@ export default function LoadChart() {
           />
 
           <YAxis
-            domain={[0, 6000]}
+            domain={mode === "real" ? ["auto", "auto"] : [0, 6000]}
             tick={{ fill: "#6b7785", fontSize: 12 }}
             axisLine={false}
             tickLine={false}
             tickFormatter={(value) => `${value / 1000}K`}
           />
 
-          <Tooltip
-            content={<CustomTooltip />}
-          />
+          <Tooltip content={<CustomTooltip mode={mode} />} />
 
           <Legend
             wrapperStyle={{
@@ -139,7 +156,7 @@ export default function LoadChart() {
           <Line
             type="monotone"
             dataKey="actual"
-            name="Actual Load"
+            name={mode === "real" ? "PGCB Generation" : "Actual Load"}
             stroke="#1f8a70"
             strokeWidth={2.5}
             dot={false}
@@ -149,7 +166,7 @@ export default function LoadChart() {
           <Line
             type="monotone"
             dataKey="forecast"
-            name="Forecast Load"
+            name={mode === "real" ? "Generation Forecast" : "Forecast Load"}
             stroke="#c9871a"
             strokeWidth={2}
             strokeDasharray="6 4"
@@ -157,7 +174,7 @@ export default function LoadChart() {
             connectNulls={false}
           />
 
-          <Line
+          {mode === "simulated" && <Line
             type="monotone"
             dataKey="capacity"
             name="Capacity"
@@ -165,7 +182,7 @@ export default function LoadChart() {
             strokeWidth={1}
             strokeDasharray="3 3"
             dot={false}
-          />
+          />}
         </LineChart>
       </ResponsiveContainer>
     </div>

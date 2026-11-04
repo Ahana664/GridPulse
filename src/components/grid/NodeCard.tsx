@@ -105,3 +105,4 @@ export default function NodeCard({ node, onClose }: NodeCardProps) {
     </div>
   );
 }
+

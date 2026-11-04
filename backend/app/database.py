@@ -56,6 +56,7 @@ async def start_database() -> bool:
                         source TEXT NOT NULL,
                         generation_mw DOUBLE PRECISION,
                         demand_mw DOUBLE PRECISION,
+                        demand_is_inferred BOOLEAN NOT NULL DEFAULT FALSE,
                         gas_mw DOUBLE PRECISION,
                         coal_mw DOUBLE PRECISION,
                         solar_mw DOUBLE PRECISION,
@@ -65,6 +66,13 @@ async def start_database() -> bool:
                         PRIMARY KEY (observed_at, source)
                     )"""
                 )
+            )
+            await connection.execute(
+                text("ALTER TABLE national_grid_readings ADD COLUMN IF NOT EXISTS demand_is_inferred BOOLEAN NOT NULL DEFAULT FALSE")
+            )
+            # Earlier importer versions copied generation into demand when no demand column existed.
+            await connection.execute(
+                text("UPDATE national_grid_readings SET demand_is_inferred=TRUE WHERE source='pgcb' AND demand_is_inferred=FALSE AND demand_mw IS NOT NULL AND demand_mw=generation_mw")
             )
             await connection.execute(
                 text(
@@ -178,6 +186,7 @@ async def save_national_readings(readings: list[dict[str, Any]]) -> None:
                 str(reading["observed_at"]).replace("Z", "+00:00")
             ),
             "source": reading.get("source", "pgcb"),
+            "demand_is_inferred": bool(reading.get("demand_is_inferred", False)),
             **{
                 key: reading.get(key)
                 for key in (
@@ -193,13 +202,14 @@ async def save_national_readings(readings: list[dict[str, Any]]) -> None:
             await connection.execute(
                 text(
                     """INSERT INTO national_grid_readings
-                    (observed_at, source, generation_mw, demand_mw, gas_mw, coal_mw,
+                    (observed_at, source, generation_mw, demand_mw, demand_is_inferred, gas_mw, coal_mw,
                      solar_mw, hydro_mw, wind_mw, imports_mw)
-                    VALUES (:observed_at, :source, :generation_mw, :demand_mw, :gas_mw,
-                            :coal_mw, :solar_mw, :hydro_mw, :wind_mw, :imports_mw)
+                        VALUES (:observed_at, :source, :generation_mw, :demand_mw, :demand_is_inferred, :gas_mw,
+                                :coal_mw, :solar_mw, :hydro_mw, :wind_mw, :imports_mw)
                     ON CONFLICT (observed_at, source) DO UPDATE SET
                         generation_mw = EXCLUDED.generation_mw,
                         demand_mw = EXCLUDED.demand_mw,
+                            demand_is_inferred = EXCLUDED.demand_is_inferred,
                         gas_mw = EXCLUDED.gas_mw,
                         coal_mw = EXCLUDED.coal_mw,
                         solar_mw = EXCLUDED.solar_mw,
@@ -246,6 +256,7 @@ async def save_hierarchical_readings(readings: list[dict[str, Any]]) -> int:
     """Upsert actual source hierarchy metadata/readings from the user's future ETL script.
 
     Expected row keys: node_id, node_name, tier, parent_node_id, observed_at, source;
+                                        demand_is_inferred = EXCLUDED.demand_is_inferred,
     optional: division_code and generation/demand/fuel/voltage/capacity/status fields.
     This function performs no scaling, interpolation, or fabricated data generation.
     """
@@ -373,7 +384,8 @@ async def get_grid_hierarchy(parent_node_id: str = "BD-NATIONAL") -> dict[str, A
                               COALESCE(reading.observed_at, nat.observed_at) AS observed_at,
                               COALESCE(reading.source, nat.source) AS source,
                               COALESCE(reading.generation_mw, nat.generation_mw) AS generation_mw,
-                              COALESCE(reading.demand_mw, nat.demand_mw) AS demand_mw,
+                            CASE WHEN n.tier = 'national' AND nat.demand_is_inferred
+                                THEN NULL ELSE COALESCE(reading.demand_mw, nat.demand_mw) END AS demand_mw,
                               COALESCE(reading.gas_mw, nat.gas_mw) AS gas_mw,
                               COALESCE(reading.coal_mw, nat.coal_mw) AS coal_mw,
                               COALESCE(reading.solar_mw, nat.solar_mw) AS solar_mw,
@@ -408,14 +420,16 @@ async def get_grid_hierarchy(parent_node_id: str = "BD-NATIONAL") -> dict[str, A
             # If parent is a division or district with no direct measurements, estimate from national
             if not parent["measured"] and parent.get("distribution_weight") is not None:
                 nat_res = await connection.execute(
-                    text("SELECT generation_mw, demand_mw, observed_at, source FROM national_grid_readings ORDER BY observed_at DESC LIMIT 1")
+                    text("SELECT generation_mw, demand_mw, demand_is_inferred, observed_at, source FROM national_grid_readings ORDER BY observed_at DESC LIMIT 1")
                 )
                 nat_row = nat_res.mappings().one_or_none()
-                if nat_row and nat_row["demand_mw"] is not None:
+                if nat_row and (nat_row["generation_mw"] is not None or nat_row["demand_mw"] is not None):
                     p_weight = float(parent["distribution_weight"])
                     parent["estimated"] = True
-                    parent["estimated_generation_mw"] = round(float(nat_row["generation_mw"] or nat_row["demand_mw"]) * p_weight, 1)
-                    parent["estimated_demand_mw"] = round(float(nat_row["demand_mw"]) * p_weight, 1)
+                    generation = nat_row["generation_mw"] if nat_row["generation_mw"] is not None else nat_row["demand_mw"]
+                    parent["estimated_generation_mw"] = round(float(generation) * p_weight, 1)
+                    if nat_row["demand_mw"] is not None and not nat_row["demand_is_inferred"]:
+                        parent["estimated_demand_mw"] = round(float(nat_row["demand_mw"]) * p_weight, 1)
 
             children_result = await connection.execute(
                 text(
@@ -488,10 +502,6 @@ async def get_grid_hierarchy(parent_node_id: str = "BD-NATIONAL") -> dict[str, A
                 node["estimated"] = True
                 node["estimated_generation_mw"] = round(float(parent_gen) * weight, 1) if parent_gen is not None else None
                 node["estimated_demand_mw"] = round(float(parent_dem) * weight, 1) if parent_dem is not None else None
-                node["load_percent"] = round(min(95.0, max(50.0, 70.0 + (weight - 0.25) * 20.0)), 1)
-                node["voltage_kv"] = 230.0 if node["tier"] in ("national", "division") else 132.0 if node["tier"] == "district" else 33.0
-                node["capacity_mw"] = round(float(node["estimated_demand_mw"] or 500) * 1.3, 1)
-                node["status"] = "normal" if (node.get("load_percent") or 0) < 85 else "warning" if (node.get("load_percent") or 0) < 95 else "critical"
         elif weights_complete:
             allocation["message"] = "Weights total 100%, but no parent reading is available to estimate child totals."
 
@@ -509,7 +519,7 @@ async def get_historical_context() -> dict[str, Any]:
         async with engine.connect() as connection:
             result = await connection.execute(
                 text(
-                    """SELECT observed_at, generation_mw, demand_mw, gas_mw, coal_mw,
+                    """SELECT observed_at, generation_mw, demand_mw, demand_is_inferred, gas_mw, coal_mw,
                               solar_mw, hydro_mw, wind_mw, imports_mw
                        FROM national_grid_readings
                        WHERE observed_at >= :cutoff AND source = 'pgcb'
@@ -523,10 +533,14 @@ async def get_historical_context() -> dict[str, Any]:
         return {"sample_count": 0, "recent_24h": []}
 
     rows.reverse()
-    demands = [float(row["demand_mw"]) for row in rows if row["demand_mw"] is not None]
+    demands = [
+        float(row["demand_mw"])
+        for row in rows
+        if row["demand_mw"] is not None and not row["demand_is_inferred"]
+    ]
     generations = [float(row["generation_mw"]) for row in rows if row["generation_mw"] is not None]
-    night = [float(row["demand_mw"]) for row in rows if row["demand_mw"] is not None and row["observed_at"].hour < 6]
-    evening = [float(row["demand_mw"]) for row in rows if row["demand_mw"] is not None and 18 <= row["observed_at"].hour <= 21]
+    night = [float(row["demand_mw"]) for row in rows if row["demand_mw"] is not None and not row["demand_is_inferred"] and row["observed_at"].hour < 6]
+    evening = [float(row["demand_mw"]) for row in rows if row["demand_mw"] is not None and not row["demand_is_inferred"] and 18 <= row["observed_at"].hour <= 21]
     renewable = [
         (float(row["solar_mw"] or 0) + float(row["wind_mw"] or 0)) / float(row["generation_mw"])
         for row in rows if row["generation_mw"] and float(row["generation_mw"]) > 0
@@ -534,17 +548,20 @@ async def get_historical_context() -> dict[str, Any]:
     recent = rows[-24:]
     return {
         "sample_count": len(rows),
+        "demand_available": bool(demands),
         "avg_demand_mw": round(sum(demands) / len(demands), 1) if demands else None,
         "max_demand_mw": round(max(demands), 1) if demands else None,
         "night_trough_mw": round(sum(night) / len(night), 1) if night else None,
         "evening_peak_mw": round(sum(evening) / len(evening), 1) if evening else None,
         "renewable_share_percent": round(sum(renewable) / len(renewable) * 100, 2) if renewable else None,
         "avg_generation_mw": round(sum(generations) / len(generations), 1) if generations else None,
+        "max_generation_mw": round(max(generations), 1) if generations else None,
         "recent_24h": [
             {
                 "observed_at": row["observed_at"].isoformat(),
                 "generation_mw": row["generation_mw"],
-                "demand_mw": row["demand_mw"],
+                "demand_mw": None if row["demand_is_inferred"] else row["demand_mw"],
+                "demand_is_inferred": row["demand_is_inferred"],
                 "solar_mw": row["solar_mw"],
                 "wind_mw": row["wind_mw"],
             }
@@ -561,9 +578,11 @@ async def get_forecast_training_data() -> list[dict[str, Any]]:
         async with engine.connect() as connection:
             result = await connection.execute(
                 text(
-                    """SELECT observed_at, demand_mw
+                                        """SELECT observed_at,
+                                                            CASE WHEN demand_is_inferred THEN generation_mw ELSE demand_mw END AS demand_mw
                        FROM national_grid_readings
-                       WHERE observed_at >= :cutoff AND source = 'pgcb' AND demand_mw IS NOT NULL
+                                             WHERE observed_at >= :cutoff AND source = 'pgcb'
+                                                 AND CASE WHEN demand_is_inferred THEN generation_mw ELSE demand_mw END IS NOT NULL
                        ORDER BY observed_at DESC LIMIT 4320"""
                 ),
                 {"cutoff": cutoff},
@@ -573,6 +592,38 @@ async def get_forecast_training_data() -> list[dict[str, Any]]:
         return [{"observed_at": row["observed_at"].isoformat(), "demand_mw": row["demand_mw"]} for row in rows]
     except Exception:
         logger.exception("Could not load national forecast training data")
+        return []
+
+
+async def get_national_history(limit: int = 500) -> list[dict[str, Any]]:
+    """Return recent real national source readings in chronological order."""
+    if engine is None:
+        return []
+    bounded_limit = min(max(int(limit), 1), 4320)
+    try:
+        async with engine.connect() as connection:
+            result = await connection.execute(
+                text(
+                    """SELECT observed_at, generation_mw, demand_mw, demand_is_inferred, gas_mw, coal_mw,
+                              solar_mw, hydro_mw, wind_mw, imports_mw
+                       FROM national_grid_readings
+                       WHERE source = 'pgcb' AND demand_mw IS NOT NULL
+                       ORDER BY observed_at DESC LIMIT :limit"""
+                ),
+                {"limit": bounded_limit},
+            )
+            rows = [dict(row) for row in result.mappings().all()]
+        rows.reverse()
+        return [
+            {
+                **row,
+                "actual_mw": row["generation_mw"] if row["demand_is_inferred"] else row["demand_mw"],
+                "observed_at": row["observed_at"].isoformat(),
+            }
+            for row in rows
+        ]
+    except Exception:
+        logger.exception("Could not load recent national source history")
         return []
 
 

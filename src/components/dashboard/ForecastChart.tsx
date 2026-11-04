@@ -10,30 +10,32 @@ import {
   YAxis,
 } from "recharts";
 import { useGridData } from "@/hooks/useGridData";
+import type { DashboardMode, RealDashboardData } from "@/types/realDashboard";
 
 interface ForecastTooltipProps {
   active?: boolean;
   payload?: { value?: number | string | null }[];
   label?: string | number;
+  mode?: DashboardMode;
 }
 
-function ForecastTooltip({ active, payload, label }: ForecastTooltipProps) {
+function ForecastTooltip({ active, payload, label, mode = "simulated" }: ForecastTooltipProps) {
   if (!active || !payload || payload.length === 0) return null;
 
   return (
     <div className="rounded-lg border border-slate-700 bg-[#0f172a] px-4 py-3 shadow-xl gp-chart-tooltip">
       <p className="mb-1 text-sm font-semibold text-white">{String(label ?? "")}</p>
       <p className="text-sm text-emerald-400">
-        Forecast Load:{" "}
+        {mode === "real" ? "National forecast:" : "Forecast Load:"}{" "}
         <span className="font-semibold text-white">{payload[0].value ?? "—"} MW</span>
       </p>
     </div>
   );
 }
 
-export default function ForecastChart() {
+export default function ForecastChart({ mode = "simulated", realData }: { mode?: DashboardMode; realData?: RealDashboardData | null }) {
   const { data } = useGridData();
-  const forecastData = data.forecast;
+  const forecastData = mode === "real" ? (realData?.forecast ?? []) : data.forecast;
 
   return (
     <div className="h-[230px] w-full">
@@ -53,13 +55,13 @@ export default function ForecastChart() {
             tickLine={false}
           />
           <YAxis
-            domain={[0, 6000]}
+            domain={mode === "real" ? ["auto", "auto"] : [0, 6000]}
             tick={{ fill: "#6b7785", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
             tickFormatter={(value) => `${value / 1000}K`}
           />
-          <Tooltip content={<ForecastTooltip />} />
+          <Tooltip content={<ForecastTooltip mode={mode} />} />
           <Area
             type="monotone"
             dataKey="load"

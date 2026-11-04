@@ -97,3 +97,4 @@ def test_parse_supabase_pgcb_payload_with_adani_and_imports() -> None:
     # Imports should automatically aggregate India (980) + Nepal (40) + Adani (1050) = 2070
     assert reading["imports_mw"] == 2070.0
     assert reading["adani_mw"] == 1050.0
+    assert reading["demand_is_inferred"] is True

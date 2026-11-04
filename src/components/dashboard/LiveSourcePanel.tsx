@@ -2,16 +2,19 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { BrainCircuit, Database, RefreshCw, Radio } from "lucide-react";
+import type { DashboardMode, RealDashboardData } from "@/types/realDashboard";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1").replace(/\/$/, "");
 type SourceStatus = {
   configured: boolean;
   status: "live" | "stale" | "waiting" | "not-configured" | "error" | "disconnected";
   lastSuccess: string | null;
+  lastError: string | null;
   reading: {
     observed_at: string | null;
     generation_mw: number | null;
     demand_mw: number | null;
+    demand_is_inferred?: boolean;
     gas_mw: number | null;
     liquid_fuel_mw?: number | null;
     coal_mw: number | null;
@@ -20,37 +23,27 @@ type SourceStatus = {
     wind_mw: number | null;
     imports_mw: number | null;
     adani_mw?: number | null;
-    measured: boolean;
-  } | null;
-};
-type HierarchyStatus = {
-  database: "connected" | "disconnected" | "error";
-  parent: {
-    observed_at: string | null;
-    source: string | null;
-    generation_mw: number | null;
-    demand_mw: number | null;
-    gas_mw: number | null;
-    liquid_fuel_mw?: number | null;
-    coal_mw: number | null;
-    solar_mw: number | null;
-    hydro_mw: number | null;
-    wind_mw: number | null;
-    imports_mw: number | null;
-    adani_mw?: number | null;
-    measured: boolean;
   } | null;
 };
 type HistorySummary = {
   sample_count: number;
+  demand_available?: boolean;
+  history_source?: "postgresql" | "supabase" | "none";
+  persistence_available?: boolean;
   avg_demand_mw?: number | null;
   max_demand_mw?: number | null;
   night_trough_mw?: number | null;
   evening_peak_mw?: number | null;
   renewable_share_percent?: number | null;
+  avg_generation_mw?: number | null;
+  max_generation_mw?: number | null;
 };
 type AiAnalysis = {
   analysis: string;
+  mode: DashboardMode;
+  forecast?: string;
+  anomalies?: string[];
+  recommendation?: string;
   suggestedFlow: { connection_id: string; proposed_mw: number } | null;
   safetyValidation: { accepted: boolean | null; message: string; connectionId?: string; proposedMw?: number; capacityMw?: number | null };
 };
@@ -58,35 +51,44 @@ type AiAnalysis = {
 const mw = (value: string | number | null | undefined) =>
   value == null ? "—" : Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
-export default function LiveSourcePanel() {
+export default function LiveSourcePanel({ mode = "simulated", realData }: { mode?: DashboardMode; realData?: RealDashboardData | null }) {
   const [source, setSource] = useState<SourceStatus | null>(null);
   const [history, setHistory] = useState<HistorySummary | null>(null);
   const [analysis, setAnalysis] = useState<AiAnalysis | null>(null);
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
+  const [loadingSync, setLoadingSync] = useState(false);
   const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
     try {
       const [sourceResponse, historyResponse] = await Promise.all([
-        fetch(`${apiBase}/grid/hierarchy?parent_node_id=BD-NATIONAL`, { cache: "no-store" }),
+        fetch(`${apiBase}/live-data`, { cache: "no-store" }),
         fetch(`${apiBase}/history/summary`, { cache: "no-store" }),
       ]);
       if (!sourceResponse.ok || !historyResponse.ok) throw new Error("Live-data service is unreachable.");
-      const hierarchy = await sourceResponse.json() as HierarchyStatus;
-      const reading = hierarchy.parent?.measured ? hierarchy.parent : null;
-      const readingAge = reading?.observed_at ? Date.now() - new Date(reading.observed_at).getTime() : Infinity;
-      const staleAfterMs = 2 * 60 * 60 * 1000;
-      setSource({
-        configured: hierarchy.database === "connected",
-        status: hierarchy.database !== "connected" ? hierarchy.database : !reading ? "waiting" : readingAge > staleAfterMs ? "stale" : "live",
-        lastSuccess: reading?.observed_at ?? null,
-        reading,
-      });
+      const liveStatus = await sourceResponse.json() as SourceStatus;
+      setSource(liveStatus);
+      setError(liveStatus.lastError ?? "");
       setHistory((await historyResponse.json()) as HistorySummary);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to read data-source status.");
     }
   }, []);
+
+  async function syncLiveData() {
+    setLoadingSync(true);
+    setError("");
+    try {
+      const response = await fetch(`${apiBase}/live-data/sync`, { method: "POST" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail ?? "Live-data synchronization failed.");
+      await refresh();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Live-data synchronization failed.");
+    } finally {
+      setLoadingSync(false);
+    }
+  }
 
   useEffect(() => {
     const initial = setTimeout(() => void refresh(), 0);
@@ -98,23 +100,24 @@ export default function LiveSourcePanel() {
   }, [refresh]);
 
   async function runAnalysis() {
+    const requestedMode = mode;
     setLoadingAnalysis(true);
     setError("");
     try {
-      const response = await fetch(`${apiBase}/ai/analyze`, { method: "POST" });
+      const response = await fetch(`${apiBase}/ai/analyze?mode=${mode}`, { method: "POST" });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.detail ?? "AI analysis failed.");
-      setAnalysis(payload as AiAnalysis);
+      if (requestedMode === mode) setAnalysis(payload as AiAnalysis);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "AI analysis failed.");
+      if (requestedMode === mode) setError(reason instanceof Error ? reason.message : "AI analysis failed.");
     } finally {
       setLoadingAnalysis(false);
     }
   }
 
-  const reading = source?.reading;
+  const reading = mode === "real" && realData?.latest ? realData.latest : source?.reading;
   const connected = source?.status === "live";
-  const sourceLabel = connected ? "SOURCE LIVE" : source?.status === "stale" ? "DATA STALE" : source?.status === "error" || source?.status === "disconnected" ? "DB OFFLINE" : "AWAITING SOURCE";
+  const sourceLabel = connected ? "SOURCE LIVE" : source?.status === "stale" ? "DATA STALE" : source?.status === "error" || source?.status === "disconnected" ? "SOURCE ERROR" : source?.status === "not-configured" ? "NOT CONFIGURED" : reading ? "LAST SOURCE RECORD" : "AWAITING SOURCE";
 
   return (
     <section className="gp-card gp-source-card">
@@ -130,37 +133,48 @@ export default function LiveSourcePanel() {
 
       <div className="gp-source-values">
         <div><span>Generation</span><strong>{mw(reading?.generation_mw)} <small>MW</small></strong></div>
-        <div><span>National demand</span><strong>{mw(reading?.demand_mw)} <small>MW</small></strong></div>
+        <div><span>National demand</span><strong>{reading?.demand_is_inferred ? "Not supplied" : <>{mw(reading?.demand_mw)} <small>MW</small></>}</strong></div>
         <div><span>Gas · coal</span><strong className="gp-fuel">{mw(reading?.gas_mw)} · {mw(reading?.coal_mw)} <small>MW</small></strong></div>
         <div><span>Solar · hydro · wind</span><strong className="gp-fuel">{mw(reading?.solar_mw)} · {mw(reading?.hydro_mw)} · {mw(reading?.wind_mw)} <small>MW</small></strong></div>
-        <div><span>Last reading</span><strong className="gp-time">{source?.lastSuccess ? new Date(source.lastSuccess).toLocaleString() : "Not received"}</strong></div>
+        <div><span>Last reading</span><strong className="gp-time">{reading?.observed_at ? new Date(reading.observed_at).toLocaleString() : source?.lastSuccess ? new Date(source.lastSuccess).toLocaleString() : "Not received"}</strong></div>
       </div>
 
       <p className="gp-disclosure">
-        <Radio size={15} /> National readings shown here come from stored source records. The separate 20-node simulator is modeled data, never a physical control system.
+        <Radio size={15} /> National readings come from the configured PGCB/Supabase source. Persisted history uses the separate PostgreSQL database; the 20-node simulator is modeled data, never a physical control system.
       </p>
+      <button className="gp-button" type="button" onClick={syncLiveData} disabled={loadingSync || !source?.configured}>
+        <RefreshCw size={15} className={loadingSync ? "gp-spin" : ""} />
+        {loadingSync ? "Syncing source" : "Sync live source now"}
+      </button>
 
       <div className="gp-history-box">
-        <div className="gp-history-title"><Database size={15} /> PERSISTED NATIONAL HISTORY <span>last 180 days</span></div>
+        <div className="gp-history-title"><Database size={15} /> NATIONAL HISTORY <span>{history?.history_source === "supabase" ? "live Supabase source" : history?.history_source === "postgresql" ? "PostgreSQL" : "last 180 days"}</span></div>
         <div className="gp-history-stats">
           <span>{history?.sample_count ?? 0}<small>hourly samples</small></span>
-          <span>{mw(history?.avg_demand_mw)}<small>avg demand · MW</small></span>
-          <span>{mw(history?.max_demand_mw)}<small>peak demand · MW</small></span>
+          <span>{mw(history?.demand_available ? history.avg_demand_mw : history?.avg_generation_mw)}<small>{history?.demand_available ? "avg demand · MW" : "avg generation · MW"}</small></span>
+          <span>{mw(history?.demand_available ? history.max_demand_mw : history?.max_generation_mw)}<small>{history?.demand_available ? "peak demand · MW" : "peak generation · MW"}</small></span>
           <span>{history?.renewable_share_percent == null ? "—" : `${history.renewable_share_percent}%`}<small>solar + wind share</small></span>
         </div>
-        {history?.sample_count === 0 && <p className="gp-muted">No historical records yet. The summary fills as hourly source readings are collected.</p>}
+        {history?.sample_count === 0 && <p className="gp-muted">No historical records are available. Confirm Supabase table access and database connectivity.</p>}
+        {!!history?.sample_count && history.persistence_available === false && <p className="gp-muted">Showing source history fetched from Supabase; it is not persisted to PostgreSQL until the database connection is restored.</p>}
       </div>
 
       <div className="gp-ai-row">
-        <div><span className="gp-eyebrow">AI ADVISORY · GEMINI</span><p className="gp-muted">Uses current state and stored history; advice is never executed.</p></div>
+        <div><span className="gp-eyebrow">AI ADVISORY · GEMINI · {mode === "real" ? "REAL NATIONAL DATA" : "20-NODE SIMULATION"}</span><p className="gp-muted">Analyzes only the selected mode; advice is never executed.</p></div>
         <button className="gp-button" type="button" onClick={runAnalysis} disabled={loadingAnalysis}>
           {loadingAnalysis ? <RefreshCw size={15} className="gp-spin" /> : <BrainCircuit size={16} />}
           {loadingAnalysis ? "Analyzing" : "Run analysis"}
         </button>
       </div>
-      {analysis && (
+      {analysis?.mode === mode && (
         <div className="gp-analysis" role="status">
-          <p>{analysis.analysis}</p>
+          {analysis.forecast || analysis.recommendation || analysis.anomalies ? (
+            <>
+              {analysis.forecast && <p><strong>3–6h outlook:</strong> {analysis.forecast}</p>}
+              {!!analysis.anomalies?.length && <p><strong>Anomalies:</strong> {analysis.anomalies.join("; ")}</p>}
+              {analysis.recommendation && <p><strong>Recommendation:</strong> {analysis.recommendation}</p>}
+            </>
+          ) : <p>{analysis.analysis}</p>}
           {analysis.suggestedFlow && (
             <p className={analysis.safetyValidation.accepted ? "gp-positive" : "gp-negative"}>
               Safety check {analysis.safetyValidation.accepted ? "passed" : "blocked"}: {analysis.safetyValidation.message}

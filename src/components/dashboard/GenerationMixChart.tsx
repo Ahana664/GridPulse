@@ -9,6 +9,7 @@ import {
   Tooltip,
 } from "recharts";
 import { useGridData } from "@/hooks/useGridData";
+import type { DashboardMode, RealDashboardData } from "@/types/realDashboard";
 
 const COLORS = [
   "#1f8a70",
@@ -18,11 +19,25 @@ const COLORS = [
   "#6b7785",
 ];
 
-export default function GenerationMixChart() {
+export default function GenerationMixChart({ mode = "simulated", realData }: { mode?: DashboardMode; realData?: RealDashboardData | null }) {
   const { data: grid } = useGridData();
-  const data = grid.nodes
-    .filter((node) => node.type === "generation")
-    .map((node) => ({ name: node.name, value: node.power, percentage: 0 }));
+  const latest = realData?.latest;
+  const realMix = [
+    ["Gas", latest?.gas_mw],
+    ["Liquid fuel", latest?.liquid_fuel_mw],
+    ["Coal", latest?.coal_mw],
+    ["Hydro", latest?.hydro_mw],
+    ["Solar", latest?.solar_mw],
+    ["Wind", latest?.wind_mw],
+    ["Imports", latest?.imports_mw],
+  ] as const;
+  const data = mode === "real"
+    ? realMix.flatMap(([name, value]) => typeof value === "number" && value > 0
+      ? [{ name, value, percentage: 0 }]
+      : [])
+    : grid.nodes
+      .filter((node) => node.type === "generation")
+      .map((node) => ({ name: node.name, value: node.power, percentage: 0 }));
   const total = data.reduce((sum, item) => sum + item.value, 0);
   data.forEach((item) => {
     item.percentage = total === 0 ? 0 : Math.round((item.value / total) * 100);

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
-import { ChevronRight, Database, MapPinned, RefreshCw } from "lucide-react";
+import { ArrowLeft, ChevronRight, Database, LocateFixed, MapPinned, RefreshCw, ZoomIn, ZoomOut } from "lucide-react";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1").replace(/\/$/, "");
 type Tier = "national" | "division" | "district" | "feeder";
@@ -41,6 +41,7 @@ type HierarchyResponse = {
   parent: HierarchyParent | null;
   nodes: GridNode[];
   allocation?: { ready: boolean; method: string; weight_sum: number; message: string };
+  topologySource?: "static-metadata";
 };
 
 const tierNames: Record<Tier, string> = {
@@ -60,6 +61,7 @@ const levelColor = (node: GridNode) => {
 
 export default function GridHierarchyMap() {
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [parents, setParents] = useState<{ node_id: string; name: string; tier: Tier }[]>([]);
   const [payload, setPayload] = useState<HierarchyResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -108,7 +110,11 @@ export default function GridHierarchyMap() {
     const width = 1000;
     const height = layout.height;
     const root = svg.append("g");
-    svg.call(d3.zoom<SVGSVGElement, unknown>().scaleExtent([0.75, 2.2]).on("zoom", (event) => root.attr("transform", event.transform)));
+    const zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.75, 2.2])
+      .on("zoom", (event) => root.attr("transform", event.transform));
+    zoomBehaviorRef.current = zoomBehavior;
+    svg.call(zoomBehavior);
     root.append("rect").attr("width", width).attr("height", height).attr("rx", 14).attr("fill", "#f7f2e9");
 
     const parentY = layout.parentY;
@@ -165,7 +171,11 @@ export default function GridHierarchyMap() {
         : entry.node.child_count > 0 ? `${entry.node.child_count} CHILD NODES · NO MEASUREMENTS` : "NO READING · NOT IMPORTED");
     cards.filter((entry) => canDrill(entry.node)).append("text").attr("x", 278).attr("y", 22).attr("fill", "#6b7785").attr("font-size", 15).text("›");
 
-    return () => { svg.selectAll("*").interrupt(); svg.on(".zoom", null); };
+    return () => {
+      svg.selectAll("*").interrupt();
+      svg.on(".zoom", null);
+      zoomBehaviorRef.current = null;
+    };
   }, [payload, layout, canDrill, drill]);
 
   const childTierLabel = payload?.parent?.tier === "national"
@@ -182,29 +192,55 @@ export default function GridHierarchyMap() {
     setParents((current) => current.slice(0, index));
   }
 
+  function changeZoom(factor: number) {
+    if (!svgRef.current || !zoomBehaviorRef.current) return;
+    d3.select(svgRef.current)
+      .transition()
+      .duration(180)
+      .call(zoomBehaviorRef.current.scaleBy, factor);
+  }
+
+  function resetZoom() {
+    if (!svgRef.current || !zoomBehaviorRef.current) return;
+    d3.select(svgRef.current)
+      .transition()
+      .duration(180)
+      .call(zoomBehaviorRef.current.transform, d3.zoomIdentity);
+  }
+
   return (
     <section className="gp-hierarchy-panel">
       <header className="gp-hierarchy-header">
         <div>
           <span className="gp-eyebrow">NATIONAL → REGIONAL → DISTRICT → FEEDER</span>
           <h2 className="gp-serif gp-section-title">Grid hierarchy</h2>
-          <p>Topology records and measured values come from PostgreSQL. No synthetic regional readings are shown.</p>
+          <p>Topology is shown from configured metadata; regional measurements appear only when supplied by a source.</p>
         </div>
         <div className={`gp-hierarchy-db ${payload?.database === "connected" ? "is-connected" : ""}`}><Database size={15} />{payload?.database === "connected" ? "POSTGRESQL" : payload?.database === "error" ? "QUERY ERROR" : "DATABASE OFFLINE"}</div>
       </header>
 
       <nav className="gp-hierarchy-breadcrumb" aria-label="Grid hierarchy level">
+        <button className="gp-hierarchy-back" type="button" onClick={() => navigateBack(Math.max(0, parents.length - 1))} disabled={parents.length === 0}>
+          <ArrowLeft size={13} /> Back
+        </button>
         <button type="button" onClick={() => navigateBack(0)} disabled={parents.length === 0}>Bangladesh</button>
         {parents.map((parent, index) => <span key={parent.node_id} className="gp-breadcrumb-part"><ChevronRight size={13} /><button type="button" onClick={() => navigateBack(index + 1)}>{parent.name}</button></span>)}
-        <button className="gp-hierarchy-refresh" type="button" onClick={() => setRefreshKey((key) => key + 1)} aria-label="Refresh actual grid data"><RefreshCw size={14} /></button>
+        <div className="gp-hierarchy-actions">
+          <div className="gp-hierarchy-zoom-controls" role="group" aria-label="Map zoom controls">
+            <button type="button" onClick={() => changeZoom(0.8)} aria-label="Zoom out" title="Zoom out"><ZoomOut size={14} /></button>
+            <button type="button" onClick={() => changeZoom(1.25)} aria-label="Zoom in" title="Zoom in"><ZoomIn size={14} /></button>
+            <button type="button" onClick={resetZoom} aria-label="Reset map view" title="Reset map view"><LocateFixed size={14} /></button>
+          </div>
+          <button className="gp-hierarchy-refresh" type="button" onClick={() => setRefreshKey((key) => key + 1)} aria-label="Refresh actual grid data"><RefreshCw size={14} /></button>
+        </div>
       </nav>
 
       {loading && <div className="gp-hierarchy-empty"><RefreshCw size={18} className="gp-spin" /> Loading topology records…</div>}
       {!loading && error && <div className="gp-hierarchy-empty gp-hierarchy-error" role="alert">{error}</div>}
-      {!loading && !error && payload?.database === "disconnected" && <div className="gp-hierarchy-empty">PostgreSQL is not connected. Hierarchical source readings will appear here after the database and ingestion script are configured.</div>}
-      {!loading && !error && payload?.database === "connected" && payload.parent && layout.nodes.length > 0 && (
+      {!loading && !error && payload?.database === "disconnected" && <div className="gp-hierarchy-empty">PostgreSQL is offline. Showing topology only; division, district, and feeder measurements are not available or estimated.</div>}
+      {!loading && !error && payload?.parent && layout.nodes.length > 0 && (
         <>
-          {payload.allocation && payload.parent.tier === "national" && <p className="gp-allocation-note">{payload.allocation.message} Configured weight total: {(payload.allocation.weight_sum * 100).toFixed(1)}%.</p>}
+          {payload.database === "connected" && payload.allocation && payload.parent.tier === "national" && <p className="gp-allocation-note">{payload.allocation.message} Configured weight total: {(payload.allocation.weight_sum * 100).toFixed(1)}%.</p>}
           <div className="gp-hierarchy-canvas"><svg ref={svgRef} viewBox={`0 0 1000 ${layout.height}`} role="img" aria-label={`Grid hierarchy under ${payload.parent.name}`} /></div>
         </>
       )}

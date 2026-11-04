@@ -181,9 +181,13 @@ def parse_grid_payload(content: str, content_type: str = "") -> dict[str, Any]:
     if "generation_mw" not in parsed and "demand_mw" not in parsed:
         raise ValueError("The source response contains no usable MW readings")
 
-    # In national grid telemetry, generation matches active demand load
+    # Keep simulation scaling usable when a source omits demand, but tag the proxy
+    # so real-mode views do not misrepresent generation as measured demand.
     if "demand_mw" not in parsed and "generation_mw" in parsed:
         parsed["demand_mw"] = parsed["generation_mw"]
+        parsed["demand_is_inferred"] = True
+    else:
+        parsed["demand_is_inferred"] = False
 
     parsed.setdefault("observed_at", datetime.now(timezone.utc).isoformat())
     parsed["source"] = "pgcb"
@@ -198,6 +202,11 @@ def parse_grid_history_csv(content: str) -> list[dict[str, Any]]:
         reading = _extract_mapping(normalized)
         if not reading:
             continue
+        if "demand_mw" not in reading and reading.get("generation_mw") is not None:
+            reading["demand_mw"] = reading["generation_mw"]
+            reading["demand_is_inferred"] = True
+        else:
+            reading["demand_is_inferred"] = False
         observed_at = reading.get("observed_at")
         if not observed_at:
             raise ValueError("Every historical CSV row must include a timestamp/date column")
@@ -217,19 +226,25 @@ def parse_grid_history_csv(content: str) -> list[dict[str, Any]]:
 
 async def fetch_grid_reading(url: str = "", timeout_seconds: float = 20) -> dict[str, Any]:
     target_url = url or settings.grid_source_url
+    is_supabase = False
 
     # Automatic Supabase integration
     if not target_url and settings.supabase_url:
+        is_supabase = True
         target_url = (
             f"{settings.supabase_url.rstrip('/')}/rest/v1/{settings.supabase_table}"
             "?select=*&order=datetime.desc&limit=1"
         )
+    elif target_url and settings.supabase_url and target_url.startswith(settings.supabase_url.rstrip("/")):
+        is_supabase = True
 
     if not target_url:
         raise ValueError("Neither GRID_SOURCE_URL nor SUPABASE_URL is configured")
 
     headers = {"User-Agent": "GridPulse-Research-Dashboard/1.0"}
-    if ("supabase.co" in target_url or settings.supabase_url in target_url) and settings.supabase_key:
+    if is_supabase:
+        if not settings.supabase_key:
+            raise ValueError("SUPABASE_URL is set, but SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY is missing")
         headers["apikey"] = settings.supabase_key
         headers["Authorization"] = f"Bearer {settings.supabase_key}"
 
@@ -238,7 +253,7 @@ async def fetch_grid_reading(url: str = "", timeout_seconds: float = 20) -> dict
         response.raise_for_status()
 
     parsed = parse_grid_payload(response.text, response.headers.get("content-type", ""))
-    if "supabase.co" in target_url:
+    if is_supabase:
         parsed["source"] = "pgcb_supabase"
     return parsed
 
@@ -246,6 +261,9 @@ async def fetch_grid_reading(url: str = "", timeout_seconds: float = 20) -> dict
 async def fetch_supabase_history(limit: int = 500, timeout_seconds: float = 30) -> list[dict[str, Any]]:
     """Fetch recent historical demand records from Supabase for model training."""
     if not settings.supabase_url:
+        return []
+    if not settings.supabase_key:
+        logger.warning("Supabase history is configured without an API key; set SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY")
         return []
     target_url = (
         f"{settings.supabase_url.rstrip('/')}/rest/v1/{settings.supabase_table}"
@@ -260,6 +278,7 @@ async def fetch_supabase_history(limit: int = 500, timeout_seconds: float = 30) 
         async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=True) as client:
             response = await client.get(target_url, headers=headers)
             if response.status_code != 200:
+                logger.warning("Supabase history request failed with HTTP %s", response.status_code)
                 return []
             data = response.json()
             if not isinstance(data, list):
@@ -275,7 +294,16 @@ async def fetch_supabase_history(limit: int = 500, timeout_seconds: float = 30) 
             records.append({
                 "observed_at": norm["observed_at"],
                 "demand_mw": norm.get("demand_mw") or norm.get("generation_mw"),
+                "demand_is_inferred": norm.get("demand_is_inferred", False),
                 "generation_mw": norm.get("generation_mw"),
+                "gas_mw": norm.get("gas_mw"),
+                "liquid_fuel_mw": norm.get("liquid_fuel_mw"),
+                "coal_mw": norm.get("coal_mw"),
+                "solar_mw": norm.get("solar_mw"),
+                "hydro_mw": norm.get("hydro_mw"),
+                "wind_mw": norm.get("wind_mw"),
+                "imports_mw": norm.get("imports_mw"),
+                "source": "pgcb",
             })
         except Exception:
             continue
