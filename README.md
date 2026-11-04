@@ -2,6 +2,7 @@
 
 GridPulse is an academic smart-grid operations simulator and dashboard. It models a 20-node virtual grid, streams generated telemetry, forecasts demand, flags simulated anomalies, evaluates deterministic safety rules, and lets an operator explore grid-shock scenarios. It is a demonstration and decision-support project only: it does not connect to, monitor, or control physical electrical infrastructure. 
 
+
 ## Contents
 
 - [Capabilities](#capabilities)
